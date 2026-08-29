@@ -1,4 +1,11 @@
-import type { YdProductAttribute, YdProductDetails, YdSearchResult } from "../shared/yd";
+import type {
+  YdProductAttribute,
+  YdProductDetails,
+  YdSearchHit,
+  YdSearchIdentity,
+  YdSearchResult,
+} from "../shared/yd";
+import { pickMatchingSearchHit, searchHitToResult } from "../shared/yd";
 
 const YD_ORIGIN = "https://www.yogademocracy.com";
 
@@ -20,32 +27,132 @@ function upgradeImageUrl(imageUrl: string): string {
   return imageUrl.replace(/sw=\d+/, "sw=800").replace(/q=\d+/, "q=85");
 }
 
-/** Parse YD search results HTML for the first matching product. */
-export function parseSearchHtml(html: string): YdSearchResult {
-  const imgMatch = html.match(
-    /src="(https:\/\/www\.yogademocracy\.com\/dw\/image\/v2\/[^"]*Sites-yd-products[^"]*?)"/
-  );
-  const imageUrl = imgMatch ? upgradeImageUrl(decodeHtml(imgMatch[1])) : null;
+const SHOP_PATH_RE = /(?:https:\/\/www\.yogademocracy\.com)?\/shop\/[^"#?]+\.html/i;
+const PRODUCT_IMG_RE =
+  /src="(https:\/\/www\.yogademocracy\.com\/dw\/image\/v2\/[^"]*Sites-yd-products[^"]*?)"/i;
 
-  const urlMatch = html.match(
-    /href="((?:https:\/\/www\.yogademocracy\.com)?\/shop\/[^"]*\.html)"/
-  );
-  const productUrl = urlMatch ? normalizeProductUrl(urlMatch[1]) : null;
+function productIdFromUrl(productUrl: string): string | null {
+  return productUrl.match(/\/([^/]+)\.html$/)?.[1] ?? null;
+}
 
-  let productId: string | null = null;
-  let productName: string | null = null;
+function extractImage(block: string): string | null {
+  const imgMatch = block.match(PRODUCT_IMG_RE);
+  return imgMatch ? upgradeImageUrl(decodeHtml(imgMatch[1])) : null;
+}
 
-  if (productUrl) {
-    const slugMatch = productUrl.match(/\/([^/]+)\.html$/);
-    productId = slugMatch?.[1] ?? null;
+function extractName(block: string): string | null {
+  const nameMatch =
+    block.match(/data-name="([^"]+)"/i) ??
+    block.match(/<a class="link"[^>]*>([^<]+)<\/a>/i) ??
+    block.match(/alt="([^"]+)"/i);
+  return nameMatch ? decodeHtml(nameMatch[1]).trim() : null;
+}
+
+function addHit(byUrl: Map<string, YdSearchHit>, hit: YdSearchHit): void {
+  const existing = byUrl.get(hit.productUrl);
+  if (!existing) {
+    byUrl.set(hit.productUrl, hit);
+    return;
+  }
+  byUrl.set(hit.productUrl, {
+    productUrl: existing.productUrl,
+    productId: existing.productId ?? hit.productId,
+    productName: existing.productName ?? hit.productName,
+    imageUrl: existing.imageUrl ?? hit.imageUrl,
+  });
+}
+
+/**
+ * Extract every unique shop product from a YD search results page.
+ * Tiles are parsed as discrete blocks so a neighboring product cannot
+ * donate its name or image.
+ */
+export function parseSearchHits(html: string): YdSearchHit[] {
+  const byUrl = new Map<string, YdSearchHit>();
+
+  const pairRe =
+    /data-name="([^"]+)"[\s\S]{0,400}?data-url="([^"]+)"|data-url="([^"]+)"[\s\S]{0,400}?data-name="([^"]+)"/gi;
+  let pair: RegExpExecArray | null;
+  while ((pair = pairRe.exec(html)) !== null) {
+    const name = decodeHtml(pair[1] ?? pair[4] ?? "").trim();
+    const rawUrl = pair[2] ?? pair[3] ?? "";
+    if (!name || !SHOP_PATH_RE.test(rawUrl)) continue;
+    const productUrl = normalizeProductUrl(rawUrl);
+    addHit(byUrl, {
+      productUrl,
+      productId: productIdFromUrl(productUrl),
+      productName: name,
+      imageUrl: null,
+    });
   }
 
-  const nameMatch = html.match(/data-name="([^"]+)"/);
-  if (nameMatch) {
-    productName = decodeHtml(nameMatch[1]);
+  const tileStarts = [...html.matchAll(/<div class="product" data-pid="([^"]+)">/gi)];
+  for (let i = 0; i < tileStarts.length; i++) {
+    const start = tileStarts[i].index ?? 0;
+    const end = tileStarts[i + 1]?.index ?? html.length;
+    const block = html.slice(start, Math.min(end, start + 8000));
+    const pid = tileStarts[i][1];
+    const hrefMatch = block.match(
+      /href="((?:https:\/\/www\.yogademocracy\.com)?\/shop\/[^"#?]+\.html)"/i
+    );
+    if (!hrefMatch) continue;
+    addHit(byUrl, {
+      productUrl: normalizeProductUrl(hrefMatch[1]),
+      productId: pid,
+      productName: extractName(block),
+      imageUrl: extractImage(block),
+    });
   }
 
-  return { imageUrl, productUrl, productId, productName };
+  if (byUrl.size === 0) {
+    const hrefRe = /href="((?:https:\/\/www\.yogademocracy\.com)?\/shop\/[^"#?]+\.html)"/gi;
+    let hrefMatch: RegExpExecArray | null;
+    while ((hrefMatch = hrefRe.exec(html)) !== null) {
+      const productUrl = normalizeProductUrl(hrefMatch[1]);
+      const start = Math.max(0, hrefMatch.index - 400);
+      const end = Math.min(html.length, hrefMatch.index + hrefMatch[0].length + 800);
+      const block = html.slice(start, end);
+      addHit(byUrl, {
+        productUrl,
+        productId: productIdFromUrl(productUrl),
+        productName: extractName(block),
+        imageUrl: extractImage(block),
+      });
+    }
+  }
+
+  return [...byUrl.values()];
+}
+
+/**
+ * Parse YD search HTML and return the product that matches the selected
+ * style+print identity. Never returns a different product's URL.
+ *
+ * Identity is required to emit a productUrl. A lone first hit (even on a
+ * single-result page) is not treated as success — that is how
+ * Flower Child + Free Range Bra used to deep-link to Limitless Sports Bra.
+ */
+export function parseSearchHtml(html: string, identity?: YdSearchIdentity): YdSearchResult {
+  const hits = parseSearchHits(html);
+  if (!identity) return searchHitToResult(null);
+  return searchHitToResult(pickMatchingSearchHit(hits, identity));
+}
+
+/** Merge tiles from one or more search pages and pick a verified style+print hit. */
+export function pickVerifiedSearchResult(
+  htmlPages: string[],
+  identity: YdSearchIdentity
+): YdSearchResult {
+  const seen = new Set<string>();
+  const hits: YdSearchHit[] = [];
+  for (const html of htmlPages) {
+    for (const hit of parseSearchHits(html)) {
+      if (seen.has(hit.productUrl)) continue;
+      seen.add(hit.productUrl);
+      hits.push(hit);
+    }
+  }
+  return searchHitToResult(pickMatchingSearchHit(hits, identity));
 }
 
 function parseSelectOptions(selectHtml: string): YdProductAttribute["options"] {
