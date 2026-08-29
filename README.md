@@ -7,8 +7,8 @@ Design language: **Atelier** — warm cream (#FAF7F2), deep olive (#3D4A2E), ter
 ## Stack
 
 - **Frontend:** React 19, Vite, Tailwind 4, Framer Motion, Wouter
-- **Backend:** tRPC 11, Express (local dev) / Vercel Functions (prod)
-- **Deploy:** Vercel (one-click from GitHub)
+- **Backend:** tRPC 11, Express (local dev and VPS) / Vercel Functions (backup)
+- **Deploy:** VPS behind Caddy (`https://dyo.thisisus.ai`) — Vercel remains the backup (`https://yd-design-your-own.vercel.app`)
 
 ## Local development
 
@@ -34,9 +34,19 @@ npm run build
 
 Outputs to `dist/`. The Vercel deploy automatically runs this.
 
-## Deploying
+## Production on the VPS (primary)
 
-See [DEPLOY.md](./DEPLOY.md).
+```bash
+npm ci
+npm run build
+PORT=3040 HOST=127.0.0.1 npm start
+```
+
+Serves the SPA + tRPC on port **3040**. Do not bind `:80` or `:443` — Caddy reverse-proxies `dyo.thisisus.ai` to `127.0.0.1:3040`. See [HOSTING.md](./HOSTING.md) for Docker and the Caddy site block.
+
+## Deploying (Vercel backup)
+
+See [DEPLOY.md](./DEPLOY.md). The Vercel function export is unchanged.
 
 ## Launch (start here)
 

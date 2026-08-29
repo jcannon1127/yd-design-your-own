@@ -1,0 +1,15 @@
+# Publish only on loopback. Caddy on the host reverse-proxies 127.0.0.1:3040.
+#   dyo.thisisus.ai {
+#     reverse_proxy 127.0.0.1:3040
+#   }
+services:
+  dyo:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3040:3040"
+    environment:
+      NODE_ENV: production
+      PORT: "3040"
+      HOST: "0.0.0.0"
+      # OPENAI_API_KEY: ""
