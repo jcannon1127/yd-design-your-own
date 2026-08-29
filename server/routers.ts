@@ -40,6 +40,8 @@ const ydProxyRouter = router({
         printUrlName: z.string().max(120).optional(),
         styleAliases: z.array(z.string().min(1).max(120)).max(8).optional(),
         styleSlugs: z.array(z.string().min(1).max(120)).max(8).optional(),
+        printAliases: z.array(z.string().min(1).max(120)).max(8).optional(),
+        printSlugs: z.array(z.string().min(1).max(120)).max(8).optional(),
       })
     )
     .query(async ({ input }) => {
@@ -52,6 +54,8 @@ const ydProxyRouter = router({
               printUrlName: input.printUrlName,
               styleAliases: input.styleAliases,
               styleSlugs: input.styleSlugs,
+              printAliases: input.printAliases,
+              printSlugs: input.printSlugs,
             }
           : undefined;
 

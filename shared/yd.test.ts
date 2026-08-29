@@ -203,7 +203,7 @@ describe("hitMatchesIdentity", () => {
     ).toBe(true);
   });
 
-  it("rejects Rawr Talent when the catalog print is Wildcat", () => {
+  it("matches Ready Or Knot + Wildcat to Rawr Talent (same merchandising print)", () => {
     expect(
       hitMatchesIdentity(KNOT_RAWR, {
         styleName: "Ready Or Knot Tank",
@@ -211,6 +211,93 @@ describe("hitMatchesIdentity", () => {
         styleUrlSlug: "ready-or-knot-tank",
         printUrlName: "wildcat",
       })
+    ).toBe(true);
+  });
+
+  it("still rejects Ghost Leopard when the catalog print is Wildcat", () => {
+    expect(
+      hitMatchesIdentity(OM_TANK_GHOST, {
+        styleName: "Ready Or Knot Tank",
+        printName: "Wildcat",
+        styleUrlSlug: "ready-or-knot-tank",
+        printUrlName: "wildcat",
+      })
+    ).toBe(false);
+    expect(
+      hitMatchesIdentity(BELL_GHOST, {
+        styleName: "Original Bell",
+        printName: "Wildcat",
+        styleUrlSlug: "original-bell",
+        printUrlName: "wildcat",
+      })
+    ).toBe(false);
+  });
+
+  it("matches Nonstop Short + Hot Tropic (style is sold in some prints)", () => {
+    expect(
+      hitMatchesIdentity(
+        hit(
+          "Nonstop Short - Hot Tropic",
+          "https://www.yogademocracy.com/shop/bottoms/non-stop-short-hot-tropic.html"
+        ),
+        {
+          styleName: "Nonstop Short",
+          printName: "Hot Tropic",
+          styleUrlSlug: "non-stop-short",
+          printUrlName: "hot-tropic",
+        }
+      )
+    ).toBe(true);
+  });
+
+  it("matches Biker Short + Star Dust to the Joey/Biker SKU", () => {
+    expect(
+      hitMatchesIdentity(
+        hit(
+          "Biker Short - Stardust",
+          "https://www.yogademocracy.com/shop/bottoms/biker-joey-short-in-star-dust.html"
+        ),
+        {
+          styleName: "Biker Short",
+          printName: "Star Dust",
+          styleUrlSlug: "biker-short",
+          printUrlName: "star-dust",
+        }
+      )
+    ).toBe(true);
+  });
+
+  it("rejects Nonstop Short + Clever Koi when the hit is a Biker Short", () => {
+    expect(
+      hitMatchesIdentity(
+        hit(
+          "Biker Short - Clever Koi",
+          "https://www.yogademocracy.com/shop/bottoms/biker-short-in-clever-koi.html"
+        ),
+        {
+          styleName: "Nonstop Short",
+          printName: "Clever Koi",
+          styleUrlSlug: "non-stop-short",
+          printUrlName: "clever-koi",
+        }
+      )
+    ).toBe(false);
+  });
+
+  it("rejects Nonstop Short + Folklore when the hit is a tank", () => {
+    expect(
+      hitMatchesIdentity(
+        hit(
+          "Ready or Knot Tank - Folklore",
+          "https://www.yogademocracy.com/shop/tops/reversible-knot-top-in-folklore.html"
+        ),
+        {
+          styleName: "Nonstop Short",
+          printName: "Folklore",
+          styleUrlSlug: "non-stop-short",
+          printUrlName: "folklore",
+        }
+      )
     ).toBe(false);
   });
 

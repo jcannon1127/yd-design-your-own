@@ -24,6 +24,8 @@ type Combo = YdSearchIdentity & {
   allowNoMatch?: boolean;
   /** Substring that must appear in a resolved product URL. */
   expectUrlIncludes?: string;
+  /** Substrings that must not appear — another style that happens to have the print. */
+  forbidUrlIncludes?: string[];
 };
 
 const COMBOS: Combo[] = [
@@ -61,6 +63,7 @@ const COMBOS: Combo[] = [
     styleUrlSlug: "free-range-sports-bra",
     printUrlName: "wildcat",
     allowNoMatch: true,
+    forbidUrlIncludes: ["om-tank", "ghost-leopard"],
   },
   {
     styleName: "Original Bell",
@@ -68,6 +71,7 @@ const COMBOS: Combo[] = [
     styleUrlSlug: "original-bell",
     printUrlName: "wildcat",
     allowNoMatch: true,
+    forbidUrlIncludes: ["ghost-leopard"],
   },
   {
     styleName: "Free Range Bra",
@@ -99,17 +103,48 @@ const COMBOS: Combo[] = [
   },
   {
     styleName: "Nonstop Short",
-    printName: "Star Dust",
+    printName: "Hot Tropic",
     styleUrlSlug: "non-stop-short",
+    printUrlName: "hot-tropic",
+    expectUrlIncludes: "non-stop-short-hot-tropic",
+  },
+  {
+    styleName: "Biker Short",
+    printName: "Star Dust",
+    styleUrlSlug: "biker-short",
     printUrlName: "star-dust",
-    expectUrlIncludes: "non-stop-short",
+    expectUrlIncludes: "biker-joey-short-in-star-dust",
   },
   {
     styleName: "Ready Or Knot Tank",
     printName: "Wildcat",
     styleUrlSlug: "ready-or-knot-tank",
     printUrlName: "wildcat",
+    expectUrlIncludes: "reversible-knot-top-in-rawr-talent",
+  },
+  {
+    styleName: "Nonstop Short",
+    printName: "Star Dust",
+    styleUrlSlug: "non-stop-short",
+    printUrlName: "star-dust",
     allowNoMatch: true,
+    forbidUrlIncludes: ["biker-joey-short", "biker-short-in-"],
+  },
+  {
+    styleName: "Nonstop Short",
+    printName: "Clever Koi",
+    styleUrlSlug: "non-stop-short",
+    printUrlName: "clever-koi",
+    allowNoMatch: true,
+    forbidUrlIncludes: ["biker-short"],
+  },
+  {
+    styleName: "Nonstop Short",
+    printName: "Folklore",
+    styleUrlSlug: "non-stop-short",
+    printUrlName: "folklore",
+    allowNoMatch: true,
+    forbidUrlIncludes: ["reversible-knot-top", "/shop/tops/"],
   },
 ];
 
@@ -156,6 +191,12 @@ async function main() {
           continue;
         }
         fail(`${label} — no verified style+print match`);
+        failed++;
+        continue;
+      }
+
+      if (combo.forbidUrlIncludes?.some((needle) => search.productUrl!.includes(needle))) {
+        fail(`${label} — wrong-style URL ${search.productUrl.split("/").pop()}`);
         failed++;
         continue;
       }

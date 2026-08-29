@@ -52,6 +52,10 @@ export interface YdSearchIdentity {
   styleAliases?: string[];
   /** Extra YD URL slugs that identify this style. */
   styleSlugs?: string[];
+  /** Extra YD merchandising print names (e.g. Rawr Talent for Wildcat). */
+  printAliases?: string[];
+  /** Extra YD URL slugs that identify this print. */
+  printSlugs?: string[];
 }
 
 /**
@@ -74,6 +78,21 @@ const STYLE_YD_EQUIVALENTS: Record<string, { names: string[]; slugs: string[] }>
   "free range bra": {
     names: ["Free Range Bra", "Free Range Sports Bra"],
     slugs: ["free-range-sports-bra"],
+  },
+};
+
+/**
+ * Same artwork, different merchandising name. Ghost Leopard is a different print
+ * and is intentionally not listed here.
+ */
+const PRINT_YD_EQUIVALENTS: Record<string, { names: string[]; slugs: string[] }> = {
+  wildcat: {
+    names: ["Wildcat", "Rawr Talent"],
+    slugs: ["wildcat", "rawr-talent"],
+  },
+  "rawr talent": {
+    names: ["Wildcat", "Rawr Talent"],
+    slugs: ["wildcat", "rawr-talent"],
   },
 };
 
@@ -102,6 +121,18 @@ function styleCandidates(identity: YdSearchIdentity): { names: string[]; slugs: 
   return {
     names: uniqueStrings([identity.styleName, ...builtin.names, ...(identity.styleAliases ?? [])]),
     slugs: uniqueStrings([identity.styleUrlSlug, ...builtin.slugs, ...(identity.styleSlugs ?? [])]),
+  };
+}
+
+function printCandidates(identity: YdSearchIdentity): { names: string[]; slugs: string[] } {
+  const key = tokenizeName(identity.printName).join(" ");
+  const slugKey = (identity.printUrlName ?? "").replace(/-/g, " ");
+  const builtin =
+    PRINT_YD_EQUIVALENTS[key] ??
+    PRINT_YD_EQUIVALENTS[slugKey] ?? { names: [identity.printName], slugs: identity.printUrlName ? [identity.printUrlName] : [] };
+  return {
+    names: uniqueStrings([identity.printName, ...builtin.names, ...(identity.printAliases ?? [])]),
+    slugs: uniqueStrings([identity.printUrlName, ...builtin.slugs, ...(identity.printSlugs ?? [])]),
   };
 }
 
@@ -177,15 +208,17 @@ function styleMatchesIdentity(hit: YdSearchHit, identity: YdSearchIdentity): boo
 }
 
 function printMatchesIdentity(hit: YdSearchHit, identity: YdSearchIdentity): boolean {
-  const slug = identity.printUrlName?.toLowerCase() ?? "";
-  const slugMatch = slug.length >= 4 && slugAppearsInUrl(hit.productUrl, slug);
+  const { names, slugs } = printCandidates(identity);
+  const slugMatch = slugs.some((slug) => slug.length >= 4 && slugAppearsInUrl(hit.productUrl, slug));
 
   if (!hit.productName) return slugMatch;
 
   const { printPart } = splitStyleAndPrint(hit.productName);
-  const want = compactAlnum(identity.printName);
   const got = compactAlnum(printPart);
-  const nameMatch = want.length >= 4 && want === got;
+  const nameMatch = names.some((name) => {
+    const want = compactAlnum(name);
+    return want.length >= 4 && want === got;
+  });
   return nameMatch || slugMatch;
 }
 

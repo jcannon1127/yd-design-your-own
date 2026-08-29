@@ -31,6 +31,10 @@ export interface Print {
   tags?: string[];
   thumbnail?: string; // CDN URL for the print swatch image (new prints from Drive)
   isNew?: boolean; // flag for newly added prints not yet on yogademocracy.com
+  /** YD merchandising names for the same artwork (e.g. Wildcat = Rawr Talent). */
+  ydNames?: string[];
+  /** Extra YD URL slugs that identify this print. */
+  ydSlugs?: string[];
 }
 
 export interface ProductVariant {
@@ -158,7 +162,7 @@ export const PRINTS: Print[] = [
   { code: 238, name: "Ghost Leopard",              urlName: "ghost-leopard" },
   { code: 239, name: "Pretty in Black",            urlName: "pretty-in-black" },
   { code: 240, name: "Retro Rainbow",              urlName: "retro-rainbow" },
-  { code: 241, name: "Wildcat",                    urlName: "wildcat" },
+  { code: 241, name: "Wildcat",                    urlName: "wildcat", ydNames: ["Rawr Talent"], ydSlugs: ["rawr-talent"] },
   { code: 242, name: "Festival Denim",             urlName: "festival-denim" },
   { code: 243, name: "Feeling Ferntastic",         urlName: "feeling-ferntastic" },
   { code: 244, name: "Feminist News",              urlName: "feminist-news" },
@@ -272,6 +276,8 @@ export function toSearchIdentity(style: Style, print: Print) {
     printUrlName: print.urlName,
     styleAliases: style.ydNames,
     styleSlugs: style.ydSlugs,
+    printAliases: print.ydNames,
+    printSlugs: print.ydSlugs,
   };
 }
 

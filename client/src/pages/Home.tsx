@@ -83,6 +83,8 @@ function CatalogPrintThumbnail({ print, selectedStyle }: { print: Print; selecte
       printUrlName: print.urlName,
       styleAliases: selectedStyle?.ydNames,
       styleSlugs: selectedStyle?.ydSlugs,
+      printAliases: print.ydNames,
+      printSlugs: print.ydSlugs,
     },
     { staleTime: 1000 * 60 * 60, retry: 1 }
   );

@@ -232,7 +232,7 @@ describe("parseSearchHtml", () => {
     expect(merged.productName).toBe("Nonstop Short - Stardust");
   });
 
-  it("rejects Ready Or Knot + Wildcat when the only hit is Rawr Talent", () => {
+  it("matches Ready Or Knot + Wildcat to Rawr Talent (same print artwork)", () => {
     const html = `
       <div class="product" data-pid="reversible-knot-top-in-rawr-talent">
         <a href="/shop/tops/reversible-knot-top-in-rawr-talent.html">
@@ -249,8 +249,45 @@ describe("parseSearchHtml", () => {
       styleUrlSlug: "ready-or-knot-tank",
       printUrlName: "wildcat",
     });
-    expect(result.productUrl).toBeNull();
-    expect(result.productName).toBeNull();
+    expect(result.productUrl).toContain("reversible-knot-top-in-rawr-talent");
+    expect(result.productName).toBe("Ready or Knot Tank - Rawr Talent");
+  });
+
+  it("does not take a Biker or tank hit for a Nonstop Short combo that is not sold", () => {
+    const html = `
+      <div class="product" data-pid="biker-short-in-clever-koi">
+        <a href="/shop/bottoms/biker-short-in-clever-koi.html">
+          <img src="https://www.yogademocracy.com/dw/image/v2/blzz_PRD/on/demandware.static/-/Sites-yd-products/default/dw1/koi.jpg?sw=400&amp;q=80"
+               alt="Biker Short - Clever Koi" />
+        </a>
+        <div data-name="Biker Short - Clever Koi"
+             data-url="https://www.yogademocracy.com/shop/bottoms/biker-short-in-clever-koi.html"></div>
+      </div>
+      <div class="product" data-pid="reversible-knot-top-in-folklore">
+        <a href="/shop/tops/reversible-knot-top-in-folklore.html">
+          <img src="https://www.yogademocracy.com/dw/image/v2/blzz_PRD/on/demandware.static/-/Sites-yd-products/default/dw2/folk.jpg?sw=400&amp;q=80"
+               alt="Ready or Knot Tank - Folklore" />
+        </a>
+        <div data-name="Ready or Knot Tank - Folklore"
+             data-url="https://www.yogademocracy.com/shop/tops/reversible-knot-top-in-folklore.html"></div>
+      </div>
+    `;
+    expect(
+      parseSearchHtml(html, {
+        styleName: "Nonstop Short",
+        printName: "Clever Koi",
+        styleUrlSlug: "non-stop-short",
+        printUrlName: "clever-koi",
+      }).productUrl
+    ).toBeNull();
+    expect(
+      parseSearchHtml(html, {
+        styleName: "Nonstop Short",
+        printName: "Folklore",
+        styleUrlSlug: "non-stop-short",
+        printUrlName: "folklore",
+      }).productUrl
+    ).toBeNull();
   });
 
   it("returns no-match when multiple hits exist and no identity is provided", () => {
