@@ -7,6 +7,8 @@
  */
 
 import { parseProductHtml, parseSearchHtml } from "../server/ydParser";
+import type { YdSearchIdentity } from "../shared/yd";
+import { hitMatchesIdentity } from "../shared/yd";
 
 const YD_HEADERS = {
   "User-Agent":
@@ -14,12 +16,49 @@ const YD_HEADERS = {
   Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 };
 
-const COMBOS = [
-  { style: "Original Bell", print: "Flower Child" },
-  { style: "YD Legging (28\")", print: "Flower Child" },
-  { style: "Biker Short", print: "Flower Child" },
-  { style: "Free Range Bra", print: "Flower Child" },
-  { style: "Ready Or Knot Tank", print: "Flower Child" },
+type Combo = YdSearchIdentity & {
+  /** When true, a no-match is success (combo is not on YD). A wrong URL is always a failure. */
+  allowNoMatch?: boolean;
+  /** Substring that must appear in a resolved product URL. */
+  expectUrlIncludes?: string;
+};
+
+const COMBOS: Combo[] = [
+  {
+    styleName: "Original Bell",
+    printName: "Flower Child",
+    styleUrlSlug: "original-bell",
+    printUrlName: "flower-child",
+    expectUrlIncludes: "flower-child",
+  },
+  {
+    styleName: 'YD Legging (28")',
+    printName: "Folklore",
+    styleUrlSlug: "yd-legging-28",
+    printUrlName: "folklore",
+    expectUrlIncludes: "folklore-printed-yoga-leggings",
+  },
+  {
+    styleName: "Original Bell",
+    printName: "Hot Tropic",
+    styleUrlSlug: "original-bell",
+    printUrlName: "hot-tropic",
+    expectUrlIncludes: "original-bell-hot-tropic",
+  },
+  {
+    styleName: "Free Range Bra",
+    printName: "Hot Tropic",
+    styleUrlSlug: "free-range-sports-bra",
+    printUrlName: "hot-tropic",
+    expectUrlIncludes: "free-range-sports-bra",
+  },
+  {
+    styleName: "Free Range Bra",
+    printName: "Wildcat",
+    styleUrlSlug: "free-range-sports-bra",
+    printUrlName: "wildcat",
+    allowNoMatch: true,
+  },
 ];
 
 function pass(msg: string) {
@@ -36,6 +75,21 @@ async function fetchYd(url: string): Promise<string> {
   return res.text();
 }
 
+function isWrongProduct(identity: YdSearchIdentity, productUrl: string, productName: string | null): boolean {
+  if (productName && hitMatchesIdentity({ productUrl, productName, productId: null, imageUrl: null }, identity)) {
+    return false;
+  }
+  if (!productName) {
+    // URL-only: still require print slug and reject obvious mismatches.
+    const url = productUrl.toLowerCase();
+    const printSlug = identity.printUrlName?.toLowerCase();
+    if (printSlug && (url.includes(`-${printSlug}.`) || url.includes(`/${printSlug}-`) || url.includes(`-${printSlug}-`))) {
+      return false;
+    }
+  }
+  return true;
+}
+
 async function main() {
   console.log("\nYD Design Your Own — launch smoke test");
   console.log("Testing live yogademocracy.com integration\n");
@@ -43,20 +97,39 @@ async function main() {
   let passed = 0;
   let failed = 0;
 
-  for (const { style, print } of COMBOS) {
-    const label = `${style} + ${print}`;
+  for (const combo of COMBOS) {
+    const label = `${combo.styleName} + ${combo.printName}`;
     try {
       const searchHtml = await fetchYd(
-        `https://www.yogademocracy.com/search?q=${encodeURIComponent(`${print} ${style}`)}`
+        `https://www.yogademocracy.com/search?q=${encodeURIComponent(`${combo.printName} ${combo.styleName}`)}`
       );
-      const search = parseSearchHtml(searchHtml);
+      const search = parseSearchHtml(searchHtml, combo);
 
       if (!search.productUrl) {
+        if (combo.allowNoMatch) {
+          pass(`${label} — no match (not a different product)`);
+          passed++;
+          continue;
+        }
         fail(`${label} — no product URL in search results`);
         failed++;
         continue;
       }
+
+      if (isWrongProduct(combo, search.productUrl, search.productName)) {
+        fail(`${label} — wrong product ${search.productUrl.split("/").pop()}`);
+        failed++;
+        continue;
+      }
+
+      if (combo.expectUrlIncludes && !search.productUrl.includes(combo.expectUrlIncludes)) {
+        fail(`${label} — URL ${search.productUrl} missing ${combo.expectUrlIncludes}`);
+        failed++;
+        continue;
+      }
+
       pass(`${label} → ${search.productUrl.split("/").pop()}`);
+      passed++;
 
       const productHtml = await fetchYd(search.productUrl);
       const details = parseProductHtml(productHtml, search.productUrl);
@@ -71,7 +144,6 @@ async function main() {
         pass(`${label} — ${inStock}/${sizeCount} sizes in stock (${attr!.label})`);
         passed++;
       }
-      passed++;
     } catch (err) {
       fail(`${label} — ${err instanceof Error ? err.message : String(err)}`);
       failed++;

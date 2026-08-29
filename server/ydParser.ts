@@ -1,4 +1,11 @@
-import type { YdProductAttribute, YdProductDetails, YdSearchResult } from "../shared/yd";
+import type {
+  YdProductAttribute,
+  YdProductDetails,
+  YdSearchHit,
+  YdSearchIdentity,
+  YdSearchResult,
+} from "../shared/yd";
+import { pickMatchingSearchHit, searchHitToResult } from "../shared/yd";
 
 const YD_ORIGIN = "https://www.yogademocracy.com";
 
@@ -20,32 +27,82 @@ function upgradeImageUrl(imageUrl: string): string {
   return imageUrl.replace(/sw=\d+/, "sw=800").replace(/q=\d+/, "q=85");
 }
 
-/** Parse YD search results HTML for the first matching product. */
-export function parseSearchHtml(html: string): YdSearchResult {
-  const imgMatch = html.match(
-    /src="(https:\/\/www\.yogademocracy\.com\/dw\/image\/v2\/[^"]*Sites-yd-products[^"]*?)"/
-  );
-  const imageUrl = imgMatch ? upgradeImageUrl(decodeHtml(imgMatch[1])) : null;
+const SHOP_HREF_RE =
+  /(?:href|data-url)="((?:https:\/\/www\.yogademocracy\.com)?\/shop\/[^"#?]+\.html)"/gi;
+const PRODUCT_IMG_RE =
+  /src="(https:\/\/www\.yogademocracy\.com\/dw\/image\/v2\/[^"]*Sites-yd-products[^"]*?)"/i;
 
-  const urlMatch = html.match(
-    /href="((?:https:\/\/www\.yogademocracy\.com)?\/shop\/[^"]*\.html)"/
-  );
-  const productUrl = urlMatch ? normalizeProductUrl(urlMatch[1]) : null;
+function productIdFromUrl(productUrl: string): string | null {
+  return productUrl.match(/\/([^/]+)\.html$/)?.[1] ?? null;
+}
 
-  let productId: string | null = null;
-  let productName: string | null = null;
+function extractFromWindow(windowHtml: string, productUrl: string): YdSearchHit {
+  const imgMatch = windowHtml.match(PRODUCT_IMG_RE);
+  const nameMatch =
+    windowHtml.match(/data-name="([^"]+)"/i) ??
+    windowHtml.match(/alt="([^"]+)"/i) ??
+    windowHtml.match(/<a class="link"[^>]*>([^<]+)<\/a>/i);
 
-  if (productUrl) {
-    const slugMatch = productUrl.match(/\/([^/]+)\.html$/);
-    productId = slugMatch?.[1] ?? null;
+  const pidMatch = windowHtml.match(/data-(?:product-id|pid)="([^"]+)"/i);
+
+  return {
+    productUrl,
+    productId: pidMatch?.[1] ?? productIdFromUrl(productUrl),
+    productName: nameMatch ? decodeHtml(nameMatch[1]).trim() : null,
+    imageUrl: imgMatch ? upgradeImageUrl(decodeHtml(imgMatch[1])) : null,
+  };
+}
+
+function mergeHits(into: YdSearchHit, from: YdSearchHit): YdSearchHit {
+  return {
+    productUrl: into.productUrl,
+    productId: into.productId ?? from.productId,
+    productName: into.productName ?? from.productName,
+    imageUrl: into.imageUrl ?? from.imageUrl,
+  };
+}
+
+/**
+ * Extract every unique shop product from a YD search results page.
+ * Does not pick a winner — callers must match against catalog identity.
+ */
+export function parseSearchHits(html: string): YdSearchHit[] {
+  const byUrl = new Map<string, YdSearchHit>();
+
+  SHOP_HREF_RE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = SHOP_HREF_RE.exec(html)) !== null) {
+    const productUrl = normalizeProductUrl(match[1]);
+    const start = Math.max(0, match.index - 2500);
+    const end = Math.min(html.length, match.index + match[0].length + 2500);
+    const hit = extractFromWindow(html.slice(start, end), productUrl);
+    const existing = byUrl.get(productUrl);
+    byUrl.set(productUrl, existing ? mergeHits(existing, hit) : hit);
   }
 
-  const nameMatch = html.match(/data-name="([^"]+)"/);
-  if (nameMatch) {
-    productName = decodeHtml(nameMatch[1]);
+  return [...byUrl.values()];
+}
+
+/**
+ * Parse YD search HTML and return the product that matches the selected
+ * style+print identity. Never returns a different product's URL.
+ *
+ * When identity is omitted and exactly one unique product is on the page,
+ * that product is returned (single-result pages / unit fixtures).
+ * Multiple unmatched hits resolve to a no-match result.
+ */
+export function parseSearchHtml(html: string, identity?: YdSearchIdentity): YdSearchResult {
+  const hits = parseSearchHits(html);
+
+  if (identity) {
+    return searchHitToResult(pickMatchingSearchHit(hits, identity));
   }
 
-  return { imageUrl, productUrl, productId, productName };
+  if (hits.length === 1) {
+    return searchHitToResult(hits[0]);
+  }
+
+  return searchHitToResult(null);
 }
 
 function parseSelectOptions(selectHtml: string): YdProductAttribute["options"] {

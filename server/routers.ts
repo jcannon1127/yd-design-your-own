@@ -1,5 +1,6 @@
 import { generateImage } from "./_core/imageGeneration";
 import { publicProcedure, router } from "./_core/trpc";
+import type { YdSearchIdentity } from "../shared/yd";
 import { parseProductHtml, parseSearchHtml } from "./ydParser";
 import { z } from "zod";
 
@@ -25,15 +26,32 @@ async function fetchYdHtml(url: string): Promise<string> {
 
 // ─── YD PROXY ROUTER ──────────────────────────────────────────────────────────
 // Fetches product search pages from yogademocracy.com server-side to avoid CORS.
-// Returns the first product image URL and product page URL found in the results.
+// Picks the tile that matches catalog style+print identity — never the first hit.
 
 const ydProxyRouter = router({
   searchProduct: publicProcedure
-    .input(z.object({ query: z.string().min(1).max(200) }))
+    .input(
+      z.object({
+        query: z.string().min(1).max(200),
+        styleName: z.string().min(1).max(120).optional(),
+        printName: z.string().min(1).max(120).optional(),
+        styleUrlSlug: z.string().max(120).optional(),
+        printUrlName: z.string().max(120).optional(),
+      })
+    )
     .query(async ({ input }) => {
       const searchUrl = `https://www.yogademocracy.com/search?q=${encodeURIComponent(input.query)}`;
       const html = await fetchYdHtml(searchUrl);
-      return parseSearchHtml(html);
+      const identity: YdSearchIdentity | undefined =
+        input.styleName && input.printName
+          ? {
+              styleName: input.styleName,
+              printName: input.printName,
+              styleUrlSlug: input.styleUrlSlug,
+              printUrlName: input.printUrlName,
+            }
+          : undefined;
+      return parseSearchHtml(html, identity);
     }),
 
   getProductDetails: publicProcedure

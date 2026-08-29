@@ -75,7 +75,13 @@ function NewPrintThumbnail({ print }: { print: Print }) {
 function CatalogPrintThumbnail({ print, selectedStyle }: { print: Print; selectedStyle: Style | null }) {
   const styleName = selectedStyle?.name ?? "Original Bell";
   const query = trpc.yd.searchProduct.useQuery(
-    { query: `${print.name} ${styleName}` },
+    {
+      query: `${print.name} ${styleName}`,
+      styleName,
+      printName: print.name,
+      styleUrlSlug: selectedStyle?.urlSlug,
+      printUrlName: print.urlName,
+    },
     { staleTime: 1000 * 60 * 60, retry: 1 }
   );
 

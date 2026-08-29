@@ -31,6 +31,132 @@ export interface YdSearchResult {
   productName: string | null;
 }
 
+/** One product tile parsed from a YD search results page. */
+export interface YdSearchHit {
+  imageUrl: string | null;
+  productUrl: string;
+  productId: string | null;
+  productName: string | null;
+}
+
+/**
+ * Catalog style+print identity. Prefer these fields from client/src/lib/data.ts
+ * over whatever YD's search ranks first.
+ */
+export interface YdSearchIdentity {
+  styleName: string;
+  printName: string;
+  styleUrlSlug?: string;
+  printUrlName?: string;
+}
+
+const EMPTY_SEARCH_RESULT: YdSearchResult = {
+  imageUrl: null,
+  productUrl: null,
+  productId: null,
+  productName: null,
+};
+
+/** Strip parenthetical notes such as `(28")` from catalog style names. */
+function stripParens(value: string): string {
+  return value.replace(/\([^)]*\)/g, " ");
+}
+
+/** Lowercase alphanumeric-only form: "Star Dust" and "Stardust" both become "stardust". */
+export function compactAlnum(value: string): string {
+  return stripParens(value).toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/** Significant word tokens, dropping lone digits (e.g. inseam 28). */
+export function tokenizeName(value: string): string[] {
+  return stripParens(value)
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 1 && !/^\d+$/.test(token));
+}
+
+function splitStyleAndPrint(productName: string): { stylePart: string; printPart: string } {
+  const parts = productName.split(/\s+[-–—]\s+/);
+  if (parts.length >= 2) {
+    return { stylePart: parts[0], printPart: parts.slice(1).join(" - ") };
+  }
+  return { stylePart: productName, printPart: productName };
+}
+
+function slugAppearsInUrl(url: string, slug: string): boolean {
+  const haystack = url.toLowerCase();
+  const needle = slug.toLowerCase();
+  if (!needle) return false;
+  return (
+    haystack.includes(`/${needle}.`) ||
+    haystack.includes(`/${needle}-`) ||
+    haystack.includes(`-${needle}.`) ||
+    haystack.includes(`-${needle}-`)
+  );
+}
+
+function styleMatchesIdentity(hit: YdSearchHit, identity: YdSearchIdentity): boolean {
+  const name = hit.productName ?? "";
+  const { stylePart } = splitStyleAndPrint(name);
+  const catalogTokens = tokenizeName(identity.styleName);
+  const styleTokens = tokenizeName(stylePart);
+  const tokenMatch =
+    catalogTokens.length > 0 &&
+    catalogTokens.every(
+      (token) => styleTokens.includes(token) || styleTokens.some((part) => part.includes(token))
+    );
+
+  const catalogCompact = compactAlnum(identity.styleName);
+  const styleCompact = compactAlnum(stylePart);
+  const compactMatch =
+    catalogCompact.length > 0 &&
+    (catalogCompact === styleCompact || styleCompact.includes(catalogCompact));
+
+  const slug = identity.styleUrlSlug?.toLowerCase() ?? "";
+  const slugMatch =
+    !!slug &&
+    (slugAppearsInUrl(hit.productUrl, slug) ||
+      tokenizeName(slug).every((token) => styleTokens.includes(token)));
+
+  return tokenMatch || compactMatch || slugMatch;
+}
+
+function printMatchesIdentity(hit: YdSearchHit, identity: YdSearchIdentity): boolean {
+  const name = hit.productName ?? "";
+  const { printPart } = splitStyleAndPrint(name);
+  const want = compactAlnum(identity.printName);
+  const got = compactAlnum(printPart);
+  const exactName = want.length >= 4 && want === got;
+
+  const slug = identity.printUrlName?.toLowerCase() ?? "";
+  const slugMatch = slug.length >= 4 && slugAppearsInUrl(hit.productUrl, slug);
+
+  return exactName || slugMatch;
+}
+
+/** True only when the hit is the selected style AND the selected print. */
+export function hitMatchesIdentity(hit: YdSearchHit, identity: YdSearchIdentity): boolean {
+  return styleMatchesIdentity(hit, identity) && printMatchesIdentity(hit, identity);
+}
+
+/** Pick the catalog-matching hit, or null — never a different product. */
+export function pickMatchingSearchHit(
+  hits: YdSearchHit[],
+  identity: YdSearchIdentity
+): YdSearchHit | null {
+  return hits.find((hit) => hitMatchesIdentity(hit, identity)) ?? null;
+}
+
+export function searchHitToResult(hit: YdSearchHit | null): YdSearchResult {
+  if (!hit) return { ...EMPTY_SEARCH_RESULT };
+  return {
+    imageUrl: hit.imageUrl,
+    productUrl: hit.productUrl,
+    productId: hit.productId,
+    productName: hit.productName,
+  };
+}
+
 /** Build a YD product page URL with size/length pre-selected via SFCC dwvar params. */
 export function buildProductPageUrl(
   productUrl: string,

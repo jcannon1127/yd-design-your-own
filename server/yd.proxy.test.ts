@@ -45,7 +45,13 @@ describe("yd.searchProduct", () => {
     });
 
     const caller = appRouter.createCaller(createContext());
-    const result = await caller.yd.searchProduct({ query: "Flower Child Original Bell" });
+    const result = await caller.yd.searchProduct({
+      query: "Flower Child Original Bell",
+      styleName: "Original Bell",
+      printName: "Flower Child",
+      styleUrlSlug: "original-bell",
+      printUrlName: "flower-child",
+    });
 
     expect(result.imageUrl).toContain("yogademocracy.com/dw/image");
     expect(result.imageUrl).toContain("sw=800");
@@ -83,6 +89,43 @@ describe("yd.searchProduct", () => {
   it("rejects empty query strings", async () => {
     const caller = appRouter.createCaller(createContext());
     await expect(caller.yd.searchProduct({ query: "" })).rejects.toThrow();
+  });
+
+  it("does not return the first search hit when it is a different style+print", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      text: async () => `
+        <html><body>
+          <div class="product" data-pid="om-tank-in-ghost-leopard">
+            <a href="/shop/tops/om-tank-in-ghost-leopard.html">
+              <img src="https://www.yogademocracy.com/dw/image/v2/BLZZ_PRD/on/demandware.static/-/Sites-yd-products/default/abc/ghost.jpg?sw=400&amp;q=80" alt="Om Tank - Ghost Leopard" />
+            </a>
+            <div data-name="Om Tank - Ghost Leopard"
+                 data-url="https://www.yogademocracy.com/shop/tops/om-tank-in-ghost-leopard.html"></div>
+          </div>
+          <div class="product" data-pid="reversible-knot-top-in-rawr-talent">
+            <a href="/shop/tops/reversible-knot-top-in-rawr-talent.html">
+              <img src="https://www.yogademocracy.com/dw/image/v2/BLZZ_PRD/on/demandware.static/-/Sites-yd-products/default/def/rawr.jpg?sw=400&amp;q=80" alt="Ready or Knot Tank - Rawr Talent" />
+            </a>
+            <div data-name="Ready or Knot Tank - Rawr Talent"
+                 data-url="https://www.yogademocracy.com/shop/tops/reversible-knot-top-in-rawr-talent.html"></div>
+          </div>
+        </body></html>
+      `,
+    });
+
+    const caller = appRouter.createCaller(createContext());
+    const result = await caller.yd.searchProduct({
+      query: "Wildcat Free Range Bra",
+      styleName: "Free Range Bra",
+      printName: "Wildcat",
+      styleUrlSlug: "free-range-sports-bra",
+      printUrlName: "wildcat",
+    });
+
+    expect(result.productUrl).toBeNull();
+    expect(result.productName).toBeNull();
+    expect(result.imageUrl).toBeNull();
   });
 });
 

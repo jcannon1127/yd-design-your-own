@@ -10,7 +10,13 @@ export function useProductDetails(style: Style | null, print: Print | null) {
   const enabled = !!(style && print && !print.isNew);
 
   const searchQuery = trpc.yd.searchProduct.useQuery(
-    { query: enabled ? `${print!.name} ${style!.name}` : "" },
+    {
+      query: enabled ? `${print!.name} ${style!.name}` : "",
+      styleName: style?.name,
+      printName: print?.name,
+      styleUrlSlug: style?.urlSlug,
+      printUrlName: print?.urlName,
+    },
     {
       enabled,
       staleTime: 1000 * 60 * 60,
