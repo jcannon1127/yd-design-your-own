@@ -38,6 +38,10 @@ Outputs to `dist/`. The Vercel deploy automatically runs this.
 
 See [DEPLOY.md](./DEPLOY.md).
 
+## Launch (start here)
+
+See [LAUNCH.md](./LAUNCH.md) for the step-by-step checklist to get this in front of customers.
+
 ## Commercial launch
 
 See [COMMERCIAL.md](./COMMERCIAL.md) for the roadmap to make this revenue-ready on yogademocracy.com.
