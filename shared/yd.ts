@@ -97,9 +97,9 @@ function slugAppearsInUrl(url: string, slug: string): boolean {
 
 function styleMatchesIdentity(hit: YdSearchHit, identity: YdSearchIdentity): boolean {
   const slug = identity.styleUrlSlug?.toLowerCase() ?? "";
-  if (!hit.productName) {
-    return !!slug && slugAppearsInUrl(hit.productUrl, slug);
-  }
+  const slugMatch = !!slug && slugAppearsInUrl(hit.productUrl, slug);
+
+  if (!hit.productName) return slugMatch;
 
   const { stylePart } = splitStyleAndPrint(hit.productName);
   const catalogTokens = tokenizeName(identity.styleName);
@@ -117,19 +117,20 @@ function styleMatchesIdentity(hit: YdSearchHit, identity: YdSearchIdentity): boo
   const slugAsName =
     !!slug && tokenizeName(slug).every((token) => styleTokens.includes(token));
 
-  return tokenMatch || compactMatch || slugAsName;
+  return tokenMatch || compactMatch || slugAsName || slugMatch;
 }
 
 function printMatchesIdentity(hit: YdSearchHit, identity: YdSearchIdentity): boolean {
   const slug = identity.printUrlName?.toLowerCase() ?? "";
-  if (!hit.productName) {
-    return slug.length >= 4 && slugAppearsInUrl(hit.productUrl, slug);
-  }
+  const slugMatch = slug.length >= 4 && slugAppearsInUrl(hit.productUrl, slug);
+
+  if (!hit.productName) return slugMatch;
 
   const { printPart } = splitStyleAndPrint(hit.productName);
   const want = compactAlnum(identity.printName);
   const got = compactAlnum(printPart);
-  return want.length >= 4 && want === got;
+  const nameMatch = want.length >= 4 && want === got;
+  return nameMatch || slugMatch;
 }
 
 /** True only when the hit is the selected style AND the selected print. */

@@ -106,11 +106,51 @@ describe("parseSearchHtml", () => {
     expect(result.productName).toBe("Original Bell - Flower Child");
   });
 
-  it("still extracts a single-result page without identity", () => {
+  it("does not treat a single first hit as success without identity", () => {
     const result = parseSearchHtml(SEARCH_HTML);
-    expect(result.productUrl).toBe(
-      "https://www.yogademocracy.com/shop/bottoms/flower-child-printed-bell-bottoms.html"
-    );
+    expect(result.productUrl).toBeNull();
+  });
+
+  it("returns no-match for Flower Child + Free Range Bra when the only hit is Limitless", () => {
+    const html = `
+      <div class="product" data-pid="limitless-sports-bra-flower-child">
+        <a href="/shop/tops/limitless-sports-bra-flower-child.html">
+          <img src="https://www.yogademocracy.com/dw/image/v2/blzz_PRD/on/demandware.static/-/Sites-yd-products/default/dw1/limitless.jpg?sw=400&amp;q=80"
+               alt="Limitless Sports Bra - Flower Child" />
+        </a>
+        <div data-name="Limitless Sports Bra - Flower Child"
+             data-url="https://www.yogademocracy.com/shop/tops/limitless-sports-bra-flower-child.html"></div>
+      </div>
+    `;
+    const result = parseSearchHtml(html, {
+      styleName: "Free Range Bra",
+      printName: "Flower Child",
+      styleUrlSlug: "free-range-sports-bra",
+      printUrlName: "flower-child",
+    });
+    expect(result.productUrl).toBeNull();
+    expect(result.productName).toBeNull();
+  });
+
+  it("returns no-match for Wildcat + Original Bell when the first hit is Ghost Leopard", () => {
+    const html = `
+      <div class="product" data-pid="ghost-leopard-printed-bell-bottoms">
+        <a href="/shop/bottoms/ghost-leopard-printed-bell-bottoms.html">
+          <img src="https://www.yogademocracy.com/dw/image/v2/blzz_PRD/on/demandware.static/-/Sites-yd-products/default/dw1/ghost.jpg?sw=400&amp;q=80"
+               alt="Original Bell - Ghost Leopard" />
+        </a>
+        <div data-name="Original Bell - Ghost Leopard"
+             data-url="https://www.yogademocracy.com/shop/bottoms/ghost-leopard-printed-bell-bottoms.html"></div>
+      </div>
+    `;
+    const result = parseSearchHtml(html, {
+      styleName: "Original Bell",
+      printName: "Wildcat",
+      styleUrlSlug: "original-bell",
+      printUrlName: "wildcat",
+    });
+    expect(result.productUrl).toBeNull();
+    expect(result.productName).toBeNull();
   });
 
   it("picks the catalog-matching tile when it is not the first search hit", () => {

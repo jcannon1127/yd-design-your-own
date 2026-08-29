@@ -138,6 +138,20 @@ describe("hitMatchesIdentity", () => {
     ).toBe(false);
   });
 
+  it("matches a nameless hit via style and print slugs", () => {
+    expect(
+      hitMatchesIdentity(
+        hit("", "https://www.yogademocracy.com/shop/bottoms/original-bell-hot-tropic.html"),
+        {
+          styleName: "Original Bell",
+          printName: "Hot Tropic",
+          styleUrlSlug: "original-bell",
+          printUrlName: "hot-tropic",
+        }
+      )
+    ).toBe(true);
+  });
+
   it("rejects Ready or Knot Tank when the catalog style is Biker Short", () => {
     expect(
       hitMatchesIdentity(KNOT_FLOWER, {

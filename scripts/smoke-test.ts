@@ -2,6 +2,9 @@
  * Post-deploy smoke test — hits yogademocracy.com directly via the same
  * parser the production API uses. No server required.
  *
+ * Asserts style+print identity (name), not merely that some URL exists.
+ * A first-hit URL for a different product is a failure.
+ *
  * Usage:
  *   npm run smoke-test
  */
@@ -17,7 +20,7 @@ const YD_HEADERS = {
 };
 
 type Combo = YdSearchIdentity & {
-  /** When true, a no-match is success (combo is not on YD). A wrong URL is always a failure. */
+  /** When true, a no-match is success (combo is not on YD). A wrong-product URL is always a failure. */
   allowNoMatch?: boolean;
   /** Substring that must appear in a resolved product URL. */
   expectUrlIncludes?: string;
@@ -59,6 +62,20 @@ const COMBOS: Combo[] = [
     printUrlName: "wildcat",
     allowNoMatch: true,
   },
+  {
+    styleName: "Original Bell",
+    printName: "Wildcat",
+    styleUrlSlug: "original-bell",
+    printUrlName: "wildcat",
+    allowNoMatch: true,
+  },
+  {
+    styleName: "Free Range Bra",
+    printName: "Flower Child",
+    styleUrlSlug: "free-range-sports-bra",
+    printUrlName: "flower-child",
+    allowNoMatch: true,
+  },
 ];
 
 function pass(msg: string) {
@@ -75,19 +92,8 @@ async function fetchYd(url: string): Promise<string> {
   return res.text();
 }
 
-function isWrongProduct(identity: YdSearchIdentity, productUrl: string, productName: string | null): boolean {
-  if (productName && hitMatchesIdentity({ productUrl, productName, productId: null, imageUrl: null }, identity)) {
-    return false;
-  }
-  if (!productName) {
-    // URL-only: still require print slug and reject obvious mismatches.
-    const url = productUrl.toLowerCase();
-    const printSlug = identity.printUrlName?.toLowerCase();
-    if (printSlug && (url.includes(`-${printSlug}.`) || url.includes(`/${printSlug}-`) || url.includes(`-${printSlug}-`))) {
-      return false;
-    }
-  }
-  return true;
+function identityHit(productUrl: string, productName: string | null) {
+  return { productUrl, productName, productId: null, imageUrl: null };
 }
 
 async function main() {
@@ -107,17 +113,23 @@ async function main() {
 
       if (!search.productUrl) {
         if (combo.allowNoMatch) {
-          pass(`${label} — no match (not a different product)`);
+          pass(`${label} — no match (out of catalog, not a different product)`);
           passed++;
           continue;
         }
-        fail(`${label} — no product URL in search results`);
+        fail(`${label} — no verified style+print match`);
         failed++;
         continue;
       }
 
-      if (isWrongProduct(combo, search.productUrl, search.productName)) {
-        fail(`${label} — wrong product ${search.productUrl.split("/").pop()}`);
+      if (!search.productName) {
+        fail(`${label} — URL without a product name (${search.productUrl.split("/").pop()})`);
+        failed++;
+        continue;
+      }
+
+      if (!hitMatchesIdentity(identityHit(search.productUrl, search.productName), combo)) {
+        fail(`${label} — name "${search.productName}" is not ${combo.styleName} + ${combo.printName}`);
         failed++;
         continue;
       }
@@ -128,11 +140,20 @@ async function main() {
         continue;
       }
 
-      pass(`${label} → ${search.productUrl.split("/").pop()}`);
+      pass(`${label} → ${search.productName} (${search.productUrl.split("/").pop()})`);
       passed++;
 
       const productHtml = await fetchYd(search.productUrl);
       const details = parseProductHtml(productHtml, search.productUrl);
+
+      if (!details.productName || !hitMatchesIdentity(identityHit(details.productUrl, details.productName), combo)) {
+        fail(`${label} — PDP name "${details.productName}" does not match style+print`);
+        failed++;
+        continue;
+      }
+      pass(`${label} — PDP name ${details.productName}`);
+      passed++;
+
       const attr = details.attributes[0];
       const sizeCount = attr?.options.length ?? 0;
       const inStock = attr?.options.filter((o) => o.available).length ?? 0;

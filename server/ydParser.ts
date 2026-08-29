@@ -128,22 +128,14 @@ export function parseSearchHits(html: string): YdSearchHit[] {
  * Parse YD search HTML and return the product that matches the selected
  * style+print identity. Never returns a different product's URL.
  *
- * When identity is omitted and exactly one unique product is on the page,
- * that product is returned (single-result pages / unit fixtures).
- * Multiple unmatched hits resolve to a no-match result.
+ * Identity is required to emit a productUrl. A lone first hit (even on a
+ * single-result page) is not treated as success — that is how
+ * Flower Child + Free Range Bra used to deep-link to Limitless Sports Bra.
  */
 export function parseSearchHtml(html: string, identity?: YdSearchIdentity): YdSearchResult {
   const hits = parseSearchHits(html);
-
-  if (identity) {
-    return searchHitToResult(pickMatchingSearchHit(hits, identity));
-  }
-
-  if (hits.length === 1) {
-    return searchHitToResult(hits[0]);
-  }
-
-  return searchHitToResult(null);
+  if (!identity) return searchHitToResult(null);
+  return searchHitToResult(pickMatchingSearchHit(hits, identity));
 }
 
 function parseSelectOptions(selectHtml: string): YdProductAttribute["options"] {
