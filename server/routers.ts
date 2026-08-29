@@ -1,7 +1,8 @@
 import { generateImage } from "./_core/imageGeneration";
 import { publicProcedure, router } from "./_core/trpc";
 import type { YdSearchIdentity } from "../shared/yd";
-import { parseProductHtml, parseSearchHtml } from "./ydParser";
+import { searchQueryVariants } from "../shared/yd";
+import { parseProductHtml, pickVerifiedSearchResult } from "./ydParser";
 import { z } from "zod";
 
 const YD_FETCH_HEADERS = {
@@ -37,11 +38,11 @@ const ydProxyRouter = router({
         printName: z.string().min(1).max(120).optional(),
         styleUrlSlug: z.string().max(120).optional(),
         printUrlName: z.string().max(120).optional(),
+        styleAliases: z.array(z.string().min(1).max(120)).max(8).optional(),
+        styleSlugs: z.array(z.string().min(1).max(120)).max(8).optional(),
       })
     )
     .query(async ({ input }) => {
-      const searchUrl = `https://www.yogademocracy.com/search?q=${encodeURIComponent(input.query)}`;
-      const html = await fetchYdHtml(searchUrl);
       const identity: YdSearchIdentity | undefined =
         input.styleName && input.printName
           ? {
@@ -49,9 +50,27 @@ const ydProxyRouter = router({
               printName: input.printName,
               styleUrlSlug: input.styleUrlSlug,
               printUrlName: input.printUrlName,
+              styleAliases: input.styleAliases,
+              styleSlugs: input.styleSlugs,
             }
           : undefined;
-      return parseSearchHtml(html, identity);
+
+      const variants = identity
+        ? searchQueryVariants(identity.styleName, identity.printName, input.query)
+        : [input.query];
+
+      const pages: string[] = [];
+      for (const query of variants) {
+        pages.push(
+          await fetchYdHtml(`https://www.yogademocracy.com/search?q=${encodeURIComponent(query)}`)
+        );
+        if (identity) {
+          const matched = pickVerifiedSearchResult(pages, identity);
+          if (matched.productUrl) return matched;
+        }
+      }
+
+      return identity ? pickVerifiedSearchResult(pages, identity) : { imageUrl: null, productUrl: null, productId: null, productName: null };
     }),
 
   getProductDetails: publicProcedure

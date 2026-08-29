@@ -48,6 +48,76 @@ export interface YdSearchIdentity {
   printName: string;
   styleUrlSlug?: string;
   printUrlName?: string;
+  /** Extra YD storefront style names (e.g. Joey Short for Biker Short). */
+  styleAliases?: string[];
+  /** Extra YD URL slugs that identify this style. */
+  styleSlugs?: string[];
+}
+
+/**
+ * YD storefront names/slugs that mean the same catalog style.
+ * Joey Short is YD's name for Biker Short — not Nonstop Short.
+ */
+const STYLE_YD_EQUIVALENTS: Record<string, { names: string[]; slugs: string[] }> = {
+  "biker short": {
+    names: ["Biker Short", "Joey Short", "The Joey Yoga Short"],
+    slugs: ["biker-short", "biker-shorts", "the-joey-yoga-short", "biker-joey-short"],
+  },
+  "nonstop short": {
+    names: ["Nonstop Short", "Non-Stop Short"],
+    slugs: ["non-stop-short", "nonstop-short"],
+  },
+  "ready or knot tank": {
+    names: ["Ready Or Knot Tank", "Ready or Knot Tank", "Reversible Knot Top"],
+    slugs: ["ready-or-knot-tank", "reversible-knot-top"],
+  },
+  "free range bra": {
+    names: ["Free Range Bra", "Free Range Sports Bra"],
+    slugs: ["free-range-sports-bra"],
+  },
+};
+
+function uniqueStrings(values: Array<string | undefined>): string[] {
+  return [...new Set(values.filter((value): value is string => !!value && value.length > 0))];
+}
+
+/** Search q= variants. Print-first is the app default; style-first finds SKUs SFCC ranks poorly. */
+export function searchQueryVariants(
+  styleName: string,
+  printName: string,
+  query?: string
+): string[] {
+  return uniqueStrings([query, `${printName} ${styleName}`, `${styleName} ${printName}`]);
+}
+
+function styleEquivalentKey(styleName: string): string {
+  return tokenizeName(styleName).join(" ");
+}
+
+function styleCandidates(identity: YdSearchIdentity): { names: string[]; slugs: string[] } {
+  const builtin = STYLE_YD_EQUIVALENTS[styleEquivalentKey(identity.styleName)] ?? {
+    names: [identity.styleName],
+    slugs: identity.styleUrlSlug ? [identity.styleUrlSlug] : [],
+  };
+  return {
+    names: uniqueStrings([identity.styleName, ...builtin.names, ...(identity.styleAliases ?? [])]),
+    slugs: uniqueStrings([identity.styleUrlSlug, ...builtin.slugs, ...(identity.styleSlugs ?? [])]),
+  };
+}
+
+function styleNameMatches(stylePart: string, candidateName: string): boolean {
+  const catalogTokens = tokenizeName(candidateName);
+  const styleTokens = tokenizeName(stylePart);
+  const tokenMatch =
+    catalogTokens.length > 0 && catalogTokens.every((token) => styleTokens.includes(token));
+
+  const catalogCompact = compactAlnum(candidateName);
+  const styleCompact = compactAlnum(stylePart);
+  const compactMatch =
+    catalogCompact.length > 0 &&
+    (catalogCompact === styleCompact || styleCompact.includes(catalogCompact));
+
+  return tokenMatch || compactMatch;
 }
 
 const EMPTY_SEARCH_RESULT: YdSearchResult = {
@@ -96,28 +166,14 @@ function slugAppearsInUrl(url: string, slug: string): boolean {
 }
 
 function styleMatchesIdentity(hit: YdSearchHit, identity: YdSearchIdentity): boolean {
-  const slug = identity.styleUrlSlug?.toLowerCase() ?? "";
-  const slugMatch = !!slug && slugAppearsInUrl(hit.productUrl, slug);
+  const { names, slugs } = styleCandidates(identity);
+  const slugMatch = slugs.some((slug) => slugAppearsInUrl(hit.productUrl, slug));
 
   if (!hit.productName) return slugMatch;
 
   const { stylePart } = splitStyleAndPrint(hit.productName);
-  const catalogTokens = tokenizeName(identity.styleName);
-  const styleTokens = tokenizeName(stylePart);
-  const tokenMatch =
-    catalogTokens.length > 0 &&
-    catalogTokens.every((token) => styleTokens.includes(token));
-
-  const catalogCompact = compactAlnum(identity.styleName);
-  const styleCompact = compactAlnum(stylePart);
-  const compactMatch =
-    catalogCompact.length > 0 &&
-    (catalogCompact === styleCompact || styleCompact.includes(catalogCompact));
-
-  const slugAsName =
-    !!slug && tokenizeName(slug).every((token) => styleTokens.includes(token));
-
-  return tokenMatch || compactMatch || slugAsName || slugMatch;
+  const nameMatch = names.some((name) => styleNameMatches(stylePart, name));
+  return nameMatch || slugMatch;
 }
 
 function printMatchesIdentity(hit: YdSearchHit, identity: YdSearchIdentity): boolean {

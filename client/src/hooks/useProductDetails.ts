@@ -4,7 +4,7 @@
  */
 
 import { trpc } from "@/lib/trpc";
-import type { Style, Print } from "@/lib/data";
+import { toSearchIdentity, type Style, type Print } from "@/lib/data";
 
 export function useProductDetails(style: Style | null, print: Print | null) {
   const enabled = !!(style && print && !print.isNew);
@@ -12,10 +12,7 @@ export function useProductDetails(style: Style | null, print: Print | null) {
   const searchQuery = trpc.yd.searchProduct.useQuery(
     {
       query: enabled ? `${print!.name} ${style!.name}` : "",
-      styleName: style?.name,
-      printName: print?.name,
-      styleUrlSlug: style?.urlSlug,
-      printUrlName: print?.urlName,
+      ...(style && print ? toSearchIdentity(style, print) : {}),
     },
     {
       enabled,

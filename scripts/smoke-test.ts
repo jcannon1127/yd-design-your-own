@@ -9,9 +9,9 @@
  *   npm run smoke-test
  */
 
-import { parseProductHtml, parseSearchHtml } from "../server/ydParser";
+import { parseProductHtml, pickVerifiedSearchResult } from "../server/ydParser";
 import type { YdSearchIdentity } from "../shared/yd";
-import { hitMatchesIdentity } from "../shared/yd";
+import { hitMatchesIdentity, searchQueryVariants } from "../shared/yd";
 
 const YD_HEADERS = {
   "User-Agent":
@@ -76,6 +76,41 @@ const COMBOS: Combo[] = [
     printUrlName: "flower-child",
     allowNoMatch: true,
   },
+  {
+    styleName: "Biker Short",
+    printName: "Rustica",
+    styleUrlSlug: "biker-short",
+    printUrlName: "rustica",
+    expectUrlIncludes: "the-joey-yoga-short-in-rustica",
+  },
+  {
+    styleName: "Ready Or Knot Tank",
+    printName: "Folklore",
+    styleUrlSlug: "ready-or-knot-tank",
+    printUrlName: "folklore",
+    expectUrlIncludes: "reversible-knot-top-in-folklore",
+  },
+  {
+    styleName: "Ready Or Knot Tank",
+    printName: "Pretty in Black",
+    styleUrlSlug: "ready-or-knot-tank",
+    printUrlName: "pretty-in-black",
+    expectUrlIncludes: "ready-or-knot-tank-pretty-in-black",
+  },
+  {
+    styleName: "Nonstop Short",
+    printName: "Star Dust",
+    styleUrlSlug: "non-stop-short",
+    printUrlName: "star-dust",
+    expectUrlIncludes: "non-stop-short",
+  },
+  {
+    styleName: "Ready Or Knot Tank",
+    printName: "Wildcat",
+    styleUrlSlug: "ready-or-knot-tank",
+    printUrlName: "wildcat",
+    allowNoMatch: true,
+  },
 ];
 
 function pass(msg: string) {
@@ -106,10 +141,13 @@ async function main() {
   for (const combo of COMBOS) {
     const label = `${combo.styleName} + ${combo.printName}`;
     try {
-      const searchHtml = await fetchYd(
-        `https://www.yogademocracy.com/search?q=${encodeURIComponent(`${combo.printName} ${combo.styleName}`)}`
-      );
-      const search = parseSearchHtml(searchHtml, combo);
+      const pages: string[] = [];
+      for (const query of searchQueryVariants(combo.styleName, combo.printName)) {
+        pages.push(
+          await fetchYd(`https://www.yogademocracy.com/search?q=${encodeURIComponent(query)}`)
+        );
+      }
+      const search = pickVerifiedSearchResult(pages, combo);
 
       if (!search.productUrl) {
         if (combo.allowNoMatch) {

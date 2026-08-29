@@ -92,7 +92,7 @@ describe("yd.searchProduct", () => {
   });
 
   it("does not return the first search hit when it is a different style+print", async () => {
-    mockFetch.mockResolvedValueOnce({
+    mockFetch.mockResolvedValue({
       ok: true,
       text: async () => `
         <html><body>

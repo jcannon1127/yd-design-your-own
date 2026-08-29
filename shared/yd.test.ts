@@ -152,6 +152,102 @@ describe("hitMatchesIdentity", () => {
     ).toBe(true);
   });
 
+  it("matches Biker Short + Rustica to Joey Short (YD's name for biker)", () => {
+    expect(
+      hitMatchesIdentity(
+        hit(
+          "Joey Short - Rustica",
+          "https://www.yogademocracy.com/shop/bottoms/the-joey-yoga-short-in-rustica.html"
+        ),
+        {
+          styleName: "Biker Short",
+          printName: "Rustica",
+          styleUrlSlug: "biker-short",
+          printUrlName: "rustica",
+        }
+      )
+    ).toBe(true);
+  });
+
+  it("rejects Biker Joey Short when the catalog style is Nonstop Short", () => {
+    expect(
+      hitMatchesIdentity(
+        hit(
+          "Biker Short - Stardust",
+          "https://www.yogademocracy.com/shop/bottoms/biker-joey-short-in-star-dust.html"
+        ),
+        {
+          styleName: "Nonstop Short",
+          printName: "Star Dust",
+          styleUrlSlug: "non-stop-short",
+          printUrlName: "star-dust",
+        }
+      )
+    ).toBe(false);
+  });
+
+  it("matches Nonstop Short + Star Dust to the Nonstop SKU, not Joey", () => {
+    expect(
+      hitMatchesIdentity(
+        hit(
+          "Nonstop Short - Stardust",
+          "https://www.yogademocracy.com/shop/bottoms/non-stop-short-in-stardust.html"
+        ),
+        {
+          styleName: "Nonstop Short",
+          printName: "Star Dust",
+          styleUrlSlug: "non-stop-short",
+          printUrlName: "star-dust",
+        }
+      )
+    ).toBe(true);
+  });
+
+  it("rejects Rawr Talent when the catalog print is Wildcat", () => {
+    expect(
+      hitMatchesIdentity(KNOT_RAWR, {
+        styleName: "Ready Or Knot Tank",
+        printName: "Wildcat",
+        styleUrlSlug: "ready-or-knot-tank",
+        printUrlName: "wildcat",
+      })
+    ).toBe(false);
+  });
+
+  it("matches Ready Or Knot Tank + Folklore on the reversible-knot-top slug", () => {
+    expect(
+      hitMatchesIdentity(
+        hit(
+          "Ready or Knot Tank - Folklore",
+          "https://www.yogademocracy.com/shop/tops/reversible-knot-top-in-folklore.html"
+        ),
+        {
+          styleName: "Ready Or Knot Tank",
+          printName: "Folklore",
+          styleUrlSlug: "ready-or-knot-tank",
+          printUrlName: "folklore",
+        }
+      )
+    ).toBe(true);
+  });
+
+  it("matches Ready Or Knot Tank + Pretty in Black", () => {
+    expect(
+      hitMatchesIdentity(
+        hit(
+          "Ready or Knot Tank -  Pretty in Black",
+          "https://www.yogademocracy.com/shop/tops/ready-or-knot-tank-pretty-in-black.html"
+        ),
+        {
+          styleName: "Ready Or Knot Tank",
+          printName: "Pretty in Black",
+          styleUrlSlug: "ready-or-knot-tank",
+          printUrlName: "pretty-in-black",
+        }
+      )
+    ).toBe(true);
+  });
+
   it("rejects Ready or Knot Tank when the catalog style is Biker Short", () => {
     expect(
       hitMatchesIdentity(KNOT_FLOWER, {

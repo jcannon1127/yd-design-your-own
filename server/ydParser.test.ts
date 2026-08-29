@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseProductHtml, parseSearchHits, parseSearchHtml } from "./ydParser";
+import { parseProductHtml, parseSearchHits, parseSearchHtml, pickVerifiedSearchResult } from "./ydParser";
 
 const SEARCH_HTML = `
 <html><body>
@@ -176,6 +176,81 @@ describe("parseSearchHtml", () => {
     expect(result.productId).toBeNull();
     expect(result.productName).toBeNull();
     expect(result.imageUrl).toBeNull();
+  });
+
+  it("matches Biker Short + Rustica to Joey Short, not a different style", () => {
+    const html = `
+      <div class="product" data-pid="the-joey-yoga-short-in-rustica">
+        <a href="/shop/bottoms/the-joey-yoga-short-in-rustica.html">
+          <img src="https://www.yogademocracy.com/dw/image/v2/blzz_PRD/on/demandware.static/-/Sites-yd-products/default/dw1/joey.jpg?sw=400&amp;q=80"
+               alt="Joey Short - Rustica" />
+        </a>
+        <div data-name="Joey Short - Rustica"
+             data-url="https://www.yogademocracy.com/shop/bottoms/the-joey-yoga-short-in-rustica.html"></div>
+      </div>
+    `;
+    const result = parseSearchHtml(html, {
+      styleName: "Biker Short",
+      printName: "Rustica",
+      styleUrlSlug: "biker-short",
+      printUrlName: "rustica",
+    });
+    expect(result.productUrl).toContain("the-joey-yoga-short-in-rustica");
+    expect(result.productName).toBe("Joey Short - Rustica");
+  });
+
+  it("does not cross-wire Nonstop Short + Star Dust to the Biker Joey SKU", () => {
+    const bikerFirst = `
+      <div class="product" data-pid="biker-joey-short-in-star-dust">
+        <a href="/shop/bottoms/biker-joey-short-in-star-dust.html">
+          <img src="https://www.yogademocracy.com/dw/image/v2/blzz_PRD/on/demandware.static/-/Sites-yd-products/default/dw1/biker.jpg?sw=400&amp;q=80"
+               alt="Biker Short - Stardust" />
+        </a>
+        <div data-name="Biker Short - Stardust"
+             data-url="https://www.yogademocracy.com/shop/bottoms/biker-joey-short-in-star-dust.html"></div>
+      </div>
+    `;
+    const nonstopPage = `
+      <div class="product" data-pid="non-stop-short-in-stardust">
+        <a href="/shop/bottoms/non-stop-short-in-stardust.html">
+          <img src="https://www.yogademocracy.com/dw/image/v2/blzz_PRD/on/demandware.static/-/Sites-yd-products/default/dw2/nonstop.jpg?sw=400&amp;q=80"
+               alt="Nonstop Short - Stardust" />
+        </a>
+        <div data-name="Nonstop Short - Stardust"
+             data-url="https://www.yogademocracy.com/shop/bottoms/non-stop-short-in-stardust.html"></div>
+      </div>
+    `;
+    const identity = {
+      styleName: "Nonstop Short",
+      printName: "Star Dust",
+      styleUrlSlug: "non-stop-short",
+      printUrlName: "star-dust",
+    };
+    expect(parseSearchHtml(bikerFirst, identity).productUrl).toBeNull();
+    const merged = pickVerifiedSearchResult([bikerFirst, nonstopPage], identity);
+    expect(merged.productUrl).toContain("non-stop-short-in-stardust");
+    expect(merged.productName).toBe("Nonstop Short - Stardust");
+  });
+
+  it("rejects Ready Or Knot + Wildcat when the only hit is Rawr Talent", () => {
+    const html = `
+      <div class="product" data-pid="reversible-knot-top-in-rawr-talent">
+        <a href="/shop/tops/reversible-knot-top-in-rawr-talent.html">
+          <img src="https://www.yogademocracy.com/dw/image/v2/blzz_PRD/on/demandware.static/-/Sites-yd-products/default/dw1/rawr.jpg?sw=400&amp;q=80"
+               alt="Ready or Knot Tank - Rawr Talent" />
+        </a>
+        <div data-name="Ready or Knot Tank - Rawr Talent"
+             data-url="https://www.yogademocracy.com/shop/tops/reversible-knot-top-in-rawr-talent.html"></div>
+      </div>
+    `;
+    const result = parseSearchHtml(html, {
+      styleName: "Ready Or Knot Tank",
+      printName: "Wildcat",
+      styleUrlSlug: "ready-or-knot-tank",
+      printUrlName: "wildcat",
+    });
+    expect(result.productUrl).toBeNull();
+    expect(result.productName).toBeNull();
   });
 
   it("returns no-match when multiple hits exist and no identity is provided", () => {

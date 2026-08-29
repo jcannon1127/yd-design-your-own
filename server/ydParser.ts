@@ -138,6 +138,23 @@ export function parseSearchHtml(html: string, identity?: YdSearchIdentity): YdSe
   return searchHitToResult(pickMatchingSearchHit(hits, identity));
 }
 
+/** Merge tiles from one or more search pages and pick a verified style+print hit. */
+export function pickVerifiedSearchResult(
+  htmlPages: string[],
+  identity: YdSearchIdentity
+): YdSearchResult {
+  const seen = new Set<string>();
+  const hits: YdSearchHit[] = [];
+  for (const html of htmlPages) {
+    for (const hit of parseSearchHits(html)) {
+      if (seen.has(hit.productUrl)) continue;
+      seen.add(hit.productUrl);
+      hits.push(hit);
+    }
+  }
+  return searchHitToResult(pickMatchingSearchHit(hits, identity));
+}
+
 function parseSelectOptions(selectHtml: string): YdProductAttribute["options"] {
   const options: YdProductAttribute["options"] = [];
   const optionRegex =

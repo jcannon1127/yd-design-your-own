@@ -17,6 +17,10 @@ export interface Style {
   categorySlug: string; // category in URL path
   icon: string; // emoji icon for the style selector (fallback)
   thumbnail: string; // CDN URL for the style thumbnail photo
+  /** YD storefront style names (e.g. "Joey Short" for catalog "Biker Short"). */
+  ydNames?: string[];
+  /** Extra YD URL slugs that identify this style. */
+  ydSlugs?: string[];
 }
 
 export interface Print {
@@ -73,6 +77,8 @@ export const STYLES: Style[] = [
     description: "High-waisted biker shorts with a flattering fit. Perfect for cycling, yoga, or everyday wear.",
     price: 68,
     urlSlug: "biker-short",
+    ydNames: ["Joey Short", "The Joey Yoga Short"],
+    ydSlugs: ["the-joey-yoga-short", "biker-joey-short", "biker-shorts"],
     categorySlug: "shorts",
     icon: "🚴",
     thumbnail: "https://d2xsxph8kpxj0f.cloudfront.net/310519663361994871/oK4hRXUzGUi6iyYp4VDfyQ/style-biker-short_7fff8321.png",
@@ -85,6 +91,8 @@ export const STYLES: Style[] = [
     description: "Our bestselling short with a comfortable high-rise waistband and a flattering length.",
     price: 72,
     urlSlug: "non-stop-short",
+    ydNames: ["Nonstop Short", "Non-Stop Short"],
+    ydSlugs: ["nonstop-short"],
     categorySlug: "shorts",
     icon: "✨",
     thumbnail: "https://d2xsxph8kpxj0f.cloudfront.net/310519663361994871/oK4hRXUzGUi6iyYp4VDfyQ/style-nonstop-short-indieflow_3d50b9da.jpg",
@@ -97,6 +105,7 @@ export const STYLES: Style[] = [
     description: "A supportive sports bra designed for freedom of movement. Stylish enough to wear as a top.",
     price: 68,
     urlSlug: "free-range-sports-bra",
+    ydNames: ["Free Range Sports Bra"],
     categorySlug: "bras",
     icon: "🌿",
     thumbnail: "https://d2xsxph8kpxj0f.cloudfront.net/310519663361994871/oK4hRXUzGUi6iyYp4VDfyQ/style-free-range-bra-stardust_6f3b7829.png",
@@ -109,6 +118,8 @@ export const STYLES: Style[] = [
     description: "A versatile tank with a signature knot detail. Pairs perfectly with any bottom.",
     price: 62,
     urlSlug: "ready-or-knot-tank",
+    ydNames: ["Ready or Knot Tank", "Reversible Knot Top"],
+    ydSlugs: ["reversible-knot-top"],
     categorySlug: "tanks",
     icon: "🎀",
     thumbnail: "https://d2xsxph8kpxj0f.cloudfront.net/310519663361994871/oK4hRXUzGUi6iyYp4VDfyQ/style-ready-or-knot-tank-botanical_ba6406d0.png",
@@ -251,6 +262,18 @@ export const ACTIVE_PRINTS = PRINTS.filter(p => {
   seen.add(p.urlName);
   return true;
 });
+
+/** Catalog identity sent to the YD search proxy — never a constructed shop URL. */
+export function toSearchIdentity(style: Style, print: Print) {
+  return {
+    styleName: style.name,
+    printName: print.name,
+    styleUrlSlug: style.urlSlug,
+    printUrlName: print.urlName,
+    styleAliases: style.ydNames,
+    styleSlugs: style.ydSlugs,
+  };
+}
 
 // ─── URL BUILDERS ──────────────────────────────────────────────────────────────
 
