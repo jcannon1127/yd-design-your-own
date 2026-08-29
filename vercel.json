@@ -5,5 +5,16 @@
   "framework": null,
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors 'self' https://www.yogademocracy.com https://yogademocracy.com"
+        }
+      ]
+    }
   ]
 }

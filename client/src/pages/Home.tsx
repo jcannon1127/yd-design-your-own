@@ -9,12 +9,13 @@
  * Fonts: Cormorant Garamond (display) + Jost (body)
  */
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { STYLES, ACTIVE_PRINTS, type Style, type Print, buildProductUrl } from "@/lib/data";
-import { useProductImage } from "@/hooks/useProductImage";
+import { STYLES, ACTIVE_PRINTS, type Style, type Print } from "@/lib/data";
+import { useProductDetails } from "@/hooks/useProductDetails";
+import CheckoutPanel from "@/components/CheckoutPanel";
 import { trpc } from "@/lib/trpc";
-import { ShoppingBag, ChevronDown, ExternalLink, ArrowRight, Sparkles, Loader2, Link2, Check } from "lucide-react";
+import { ChevronDown, ExternalLink, ArrowRight, Sparkles, Loader2, Link2, Check } from "lucide-react";
 
 // ─── HERO BANNER ──────────────────────────────────────────────────────────────
 
@@ -615,45 +616,93 @@ function PrintGrid({
   );
 }
 
-// ─── ADD TO CART BUTTON ───────────────────────────────────────────────────────
+// ─── DESKTOP PREVIEW PANEL ──────────────────────────────────────────────────
 
-function AddToCartButton({ style, print, productUrl }: { style: Style | null; print: Print | null; productUrl?: string | null }) {
-  if (!style || !print) {
-    return (
-      <button
-        disabled
-        className="w-full py-4 rounded-md font-body font-medium text-sm
-                   bg-secondary text-muted-foreground cursor-not-allowed
-                   flex items-center justify-center gap-2"
-      >
-        <ShoppingBag size={16} />
-        Complete your design to continue
-      </button>
-    );
-  }
+function DesktopPreviewPanel({
+  selectedStyle,
+  selectedPrint,
+}: {
+  selectedStyle: Style | null;
+  selectedPrint: Print | null;
+}) {
+  const product = useProductDetails(selectedStyle, selectedPrint);
+  const [copied, setCopied] = useState(false);
 
-  // productUrl is passed as prop from parent; fallback to built URL
-  const resolvedUrl = productUrl || buildProductUrl(style, print);
+  const handleShare = useCallback(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("design", "1");
+    if (selectedStyle) url.searchParams.set("style", selectedStyle.id);
+    if (selectedPrint) url.searchParams.set("print", selectedPrint.urlName);
+    navigator.clipboard.writeText(url.toString()).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  }, [selectedStyle, selectedPrint]);
 
   return (
-    <a
-      href={resolvedUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="w-full py-4 rounded-md font-body font-medium text-sm
-                 bg-primary text-primary-foreground
-                 flex items-center justify-center gap-2
-                 hover:bg-primary/90 transition-all duration-200
-                 shadow-sm hover:shadow-md"
-    >
-      <ShoppingBag size={16} />
-      Shop This Look on YD.com
-      <ExternalLink size={12} className="opacity-60" />
-    </a>
+    <div className="sticky top-24">
+      <div className="mb-4 flex items-end justify-between">
+        <div>
+          <p className="text-xs text-muted-foreground font-body uppercase tracking-widest mb-1">Preview</p>
+          <h2 className="font-display text-xl text-foreground">
+            {selectedStyle && selectedPrint
+              ? `${selectedStyle.name} in ${selectedPrint.name}`
+              : selectedStyle
+              ? selectedStyle.name
+              : "Your Design"}
+          </h2>
+        </div>
+        {selectedStyle && selectedPrint && (
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-body font-medium
+                       bg-secondary hover:bg-secondary/80 text-foreground transition-all duration-200"
+          >
+            {copied ? <Check size={11} className="text-green-600" /> : <Link2 size={11} />}
+            {copied ? "Copied!" : "Share"}
+          </button>
+        )}
+      </div>
+
+      <div className="rounded-xl overflow-hidden border border-border bg-card shadow-sm" style={{ minHeight: "520px" }}>
+        <div className="p-6 h-full" style={{ minHeight: "520px" }}>
+          <ProductPreview
+            style={selectedStyle}
+            print={selectedPrint}
+            imageUrl={product.imageUrl}
+            productUrl={product.productUrl}
+            loading={product.loading}
+            error={product.error}
+          />
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <CheckoutPanel
+          style={selectedStyle}
+          print={selectedPrint}
+          productUrl={product.productUrl}
+          productId={product.productId}
+          attributes={product.attributes}
+          loading={product.loading}
+          isCustomPrint={product.isCustomPrint}
+          hasProduct={product.hasProduct}
+        />
+      </div>
+
+      {selectedStyle && (
+        <motion.p
+          key={selectedStyle.id}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="mt-3 text-xs text-muted-foreground font-body text-center leading-relaxed"
+        >
+          {selectedStyle.description}
+        </motion.p>
+      )}
+    </div>
   );
 }
-
-// ─── HERO SECTION ─────────────────────────────────────────────────────────────
 
 function HeroSection({ onStartDesigning }: { onStartDesigning: () => void }) {
   return (
@@ -742,101 +791,17 @@ function StepIndicator({ step, total }: { step: number; total: number }) {
   );
 }
 
-// ─── DESKTOP PREVIEW PANEL ──────────────────────────────────────────────────
-// Wraps useProductImage so both ProductPreview and AddToCartButton share one fetch
-
-function DesktopPreviewPanel({
-  selectedStyle,
-  selectedPrint,
-}: {
-  selectedStyle: Style | null;
-  selectedPrint: Print | null;
-}) {
-  const { imageUrl, productUrl, loading, error } = useProductImage(selectedStyle, selectedPrint);
-  const [copied, setCopied] = useState(false);
-
-  const handleShare = useCallback(() => {
-    const url = new URL(window.location.href);
-    url.searchParams.set("design", "1");
-    if (selectedStyle) url.searchParams.set("style", selectedStyle.id);
-    if (selectedPrint) url.searchParams.set("print", selectedPrint.urlName);
-    navigator.clipboard.writeText(url.toString()).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    });
-  }, [selectedStyle, selectedPrint]);
-
-  return (
-    <div className="sticky top-24">
-      <div className="mb-4 flex items-end justify-between">
-        <div>
-          <p className="text-xs text-muted-foreground font-body uppercase tracking-widest mb-1">Preview</p>
-          <h2 className="font-display text-xl text-foreground">
-            {selectedStyle && selectedPrint
-              ? `${selectedStyle.name} in ${selectedPrint.name}`
-              : selectedStyle
-              ? selectedStyle.name
-              : "Your Design"}
-          </h2>
-        </div>
-        {selectedStyle && selectedPrint && (
-          <button
-            onClick={handleShare}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-body font-medium
-                       bg-secondary hover:bg-secondary/80 text-foreground transition-all duration-200"
-          >
-            {copied ? <Check size={11} className="text-green-600" /> : <Link2 size={11} />}
-            {copied ? "Copied!" : "Share"}
-          </button>
-        )}
-      </div>
-
-      {/* Preview box */}
-      <div className="rounded-xl overflow-hidden border border-border bg-card shadow-sm" style={{ minHeight: "520px" }}>
-        <div className="p-6 h-full" style={{ minHeight: "520px" }}>
-          <ProductPreview
-            style={selectedStyle}
-            print={selectedPrint}
-            imageUrl={imageUrl}
-            productUrl={productUrl}
-            loading={loading}
-            error={error}
-          />
-        </div>
-      </div>
-
-      {/* Add to cart */}
-      <div className="mt-4">
-        <AddToCartButton style={selectedStyle} print={selectedPrint} productUrl={productUrl} />
-      </div>
-
-      {/* Style description */}
-      {selectedStyle && (
-        <motion.p
-          key={selectedStyle.id}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="mt-3 text-xs text-muted-foreground font-body text-center leading-relaxed"
-        >
-          {selectedStyle.description}
-        </motion.p>
-      )}
-    </div>
-  );
-}
-
 // ─── MOBILE PREVIEW WRAPPER ─────────────────────────────────────────────────
 
 function MobilePreviewWrapper({
   selectedStyle,
   selectedPrint,
-  onStartOver,
 }: {
   selectedStyle: Style | null;
   selectedPrint: Print | null;
   onStartOver: () => void;
 }) {
-  const { imageUrl, productUrl, loading, error } = useProductImage(selectedStyle, selectedPrint);
+  const product = useProductDetails(selectedStyle, selectedPrint);
 
   return (
     <>
@@ -844,14 +809,23 @@ function MobilePreviewWrapper({
         <ProductPreview
           style={selectedStyle}
           print={selectedPrint}
-          imageUrl={imageUrl}
-          productUrl={productUrl}
-          loading={loading}
-          error={error}
+          imageUrl={product.imageUrl}
+          productUrl={product.productUrl}
+          loading={product.loading}
+          error={product.error}
         />
       </div>
       <div className="mt-6">
-        <AddToCartButton style={selectedStyle} print={selectedPrint} productUrl={productUrl} />
+        <CheckoutPanel
+          style={selectedStyle}
+          print={selectedPrint}
+          productUrl={product.productUrl}
+          productId={product.productId}
+          attributes={product.attributes}
+          loading={product.loading}
+          isCustomPrint={product.isCustomPrint}
+          hasProduct={product.hasProduct}
+        />
       </div>
     </>
   );
@@ -967,11 +941,13 @@ function DesktopCustomizer({
   selectedPrint,
   onStyleSelect,
   onPrintSelect,
+  embed = false,
 }: {
   selectedStyle: Style | null;
   selectedPrint: Print | null;
   onStyleSelect: (s: Style) => void;
   onPrintSelect: (p: Print) => void;
+  embed?: boolean;
 }) {
   return (
     <div className="min-h-screen bg-background">
@@ -985,10 +961,14 @@ function DesktopCustomizer({
           <div className="text-center">
             <h1 className="font-display text-2xl italic text-foreground">Design Your Own</h1>
           </div>
-          <a href="https://www.yogademocracy.com" target="_blank" rel="noopener noreferrer"
-             className="text-sm font-body text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
-            Back to Shop <ExternalLink size={12} />
-          </a>
+          {!embed ? (
+            <a href="https://www.yogademocracy.com" target="_blank" rel="noopener noreferrer"
+               className="text-sm font-body text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+              Back to Shop <ExternalLink size={12} />
+            </a>
+          ) : (
+            <div className="w-20" />
+          )}
         </div>
       </header>
 
@@ -1033,6 +1013,7 @@ function DesktopCustomizer({
       </div>
 
       {/* Footer */}
+      {!embed && (
       <footer className="border-t border-border mt-16 py-8">
         <div className="container flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3 text-muted-foreground">
@@ -1046,6 +1027,7 @@ function DesktopCustomizer({
           </div>
         </div>
       </footer>
+      )}
     </div>
   );
 }
@@ -1055,9 +1037,15 @@ function DesktopCustomizer({
 export default function Home() {
   const [selectedStyle, setSelectedStyle] = useState<Style | null>(null);
   const [selectedPrint, setSelectedPrint] = useState<Print | null>(null);
-  const [showCustomizer, setShowCustomizer] = useState(false);
   const customizerRef = useRef<HTMLDivElement>(null);
   const [isMobile, setIsMobile] = useState(false);
+
+  const embedMode = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("embed") === "1";
+  }, []);
+
+  const [showCustomizer, setShowCustomizer] = useState(embedMode);
 
   // Read URL params on mount to restore a shared design
   useEffect(() => {
@@ -1066,17 +1054,19 @@ export default function Home() {
     const printUrlName = params.get("print");
     const openDesign = params.get("design") === "1";
 
-    if (openDesign || styleId) {
+    if (embedMode || openDesign || styleId) {
       const style = styleId ? STYLES.find(s => s.id === styleId) ?? null : null;
       const print = printUrlName ? ACTIVE_PRINTS.find(p => p.urlName === printUrlName) ?? null : null;
       if (style) setSelectedStyle(style);
       if (print) setSelectedPrint(print);
       setShowCustomizer(true);
-      setTimeout(() => {
-        customizerRef.current?.scrollIntoView({ behavior: "smooth" });
-      }, 300);
+      if (!embedMode) {
+        setTimeout(() => {
+          customizerRef.current?.scrollIntoView({ behavior: "smooth" });
+        }, 300);
+      }
     }
-  }, []);
+  }, [embedMode]);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 1024);
@@ -1098,14 +1088,14 @@ export default function Home() {
   };
 
   return (
-    <div>
-      {/* Hero */}
-      <HeroSection onStartDesigning={handleStartDesigning} />
+    <div className={embedMode ? "embed-mode" : undefined}>
+      {/* Hero — hidden in embed mode for iframe use on yogademocracy.com */}
+      {!embedMode && <HeroSection onStartDesigning={handleStartDesigning} />}
 
       {/* Customizer */}
       <div ref={customizerRef}>
         <AnimatePresence>
-          {showCustomizer && (
+          {(showCustomizer || embedMode) && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1124,6 +1114,7 @@ export default function Home() {
                   selectedPrint={selectedPrint}
                   onStyleSelect={handleStyleSelect}
                   onPrintSelect={setSelectedPrint}
+                  embed={embedMode}
                 />
               )}
             </motion.div>

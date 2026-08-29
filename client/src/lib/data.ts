@@ -256,7 +256,10 @@ export const ACTIVE_PRINTS = PRINTS.filter(p => {
 
 /**
  * Build the product URL on yogademocracy.com for a given style + print combo.
- * Pattern: /shop/{categorySlug}/{styleSlug}-{printSlug}.html
+ *
+ * @deprecated Unreliable — YD product slugs don't follow a predictable pattern
+ * (e.g. "flower-child-printed-bell-bottoms" not "original-bell-flower-child").
+ * Always prefer the productUrl returned by the YD search proxy.
  */
 export function buildProductUrl(style: Style, print: Print): string {
   return `https://www.yogademocracy.com/shop/${style.categorySlug}/${style.urlSlug}-${print.urlName}.html`;

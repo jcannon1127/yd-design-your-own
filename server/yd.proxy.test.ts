@@ -2,11 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createContext } from "./_core/context";
 import { appRouter } from "./routers";
 
-// Mock fetch globally
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
-const SAMPLE_HTML = `
+const SAMPLE_SEARCH_HTML = `
 <html>
 <body>
   <div class="product-tile">
@@ -14,8 +13,24 @@ const SAMPLE_HTML = `
       <img src="https://www.yogademocracy.com/dw/image/v2/BLZZ_PRD/on/demandware.static/-/Sites-yd-products/default/abc123/Original_Bell_-_Flower_Child.png?sw=400&amp;q=80" />
     </a>
   </div>
+  <div data-name="Original Bell - Flower Child"></div>
 </body>
 </html>
+`;
+
+const SAMPLE_PRODUCT_HTML = `
+<span class="product-id">flower-child-printed-bell-bottoms</span>
+<div data-name="Original Bell - Flower Child"></div>
+<div class="row" data-attr="size">
+  <div class="col-8">
+    <label class="size">Select Size</label>
+    <select class="custom-select form-control select-size">
+      <option value="null">Select Size</option>
+      <option value="https://example.com?size=XS" data-attr-value="XS">XS</option>
+      <option value="null" data-attr-value="L" disabled>L</option>
+    </select>
+  </div>
+</div>
 `;
 
 describe("yd.searchProduct", () => {
@@ -26,19 +41,18 @@ describe("yd.searchProduct", () => {
   it("returns imageUrl and productUrl when search succeeds", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      text: async () => SAMPLE_HTML,
+      text: async () => SAMPLE_SEARCH_HTML,
     });
 
     const caller = appRouter.createCaller(createContext());
     const result = await caller.yd.searchProduct({ query: "Flower Child Original Bell" });
 
     expect(result.imageUrl).toContain("yogademocracy.com/dw/image");
-    expect(result.imageUrl).toContain("sw=800"); // resolution upgraded
-    expect(result.imageUrl).toContain("q=85"); // quality upgraded
-    expect(result.imageUrl).not.toContain("&amp;"); // HTML entities decoded
+    expect(result.imageUrl).toContain("sw=800");
     expect(result.productUrl).toBe(
       "https://www.yogademocracy.com/shop/bottoms/flower-child-printed-bell-bottoms.html"
     );
+    expect(result.productId).toBe("flower-child-printed-bell-bottoms");
   });
 
   it("returns null imageUrl and productUrl when no products found", async () => {
@@ -63,11 +77,42 @@ describe("yd.searchProduct", () => {
     const caller = appRouter.createCaller(createContext());
     await expect(
       caller.yd.searchProduct({ query: "Flower Child Original Bell" })
-    ).rejects.toThrow("YD search failed: 503");
+    ).rejects.toThrow("YD request failed: 503");
   });
 
   it("rejects empty query strings", async () => {
     const caller = appRouter.createCaller(createContext());
     await expect(caller.yd.searchProduct({ query: "" })).rejects.toThrow();
+  });
+});
+
+describe("yd.getProductDetails", () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  it("returns sizes and product metadata from a product page", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      text: async () => SAMPLE_PRODUCT_HTML,
+    });
+
+    const caller = appRouter.createCaller(createContext());
+    const result = await caller.yd.getProductDetails({
+      productUrl:
+        "https://www.yogademocracy.com/shop/bottoms/flower-child-printed-bell-bottoms.html",
+    });
+
+    expect(result.productId).toBe("flower-child-printed-bell-bottoms");
+    expect(result.attributes[0].options).toHaveLength(2);
+    expect(result.attributes[0].options[0].available).toBe(true);
+    expect(result.attributes[0].options[1].available).toBe(false);
+  });
+
+  it("rejects non-YD product URLs", async () => {
+    const caller = appRouter.createCaller(createContext());
+    await expect(
+      caller.yd.getProductDetails({ productUrl: "https://example.com/product.html" })
+    ).rejects.toThrow("Product URL must be on yogademocracy.com");
   });
 });

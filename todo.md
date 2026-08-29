@@ -20,10 +20,10 @@
 
 ## Phase 2 (Future)
 - [ ] Mix-and-match outfit builder (e.g., print legging + solid bra as a set)
-- [ ] SFCC integration (full Add to Cart with size selection)
+- [ ] SFCC OCAPI integration (true in-app Add to Cart without leaving customizer)
 - [ ] Solid color selection tab
-- [ ] Share your design / social sharing
-- [ ] Embed on yogademocracy.com
+- [ ] Share your design / social sharing with OG image
+- [x] Embed on yogademocracy.com (`?embed=1` + iframe CSP headers)
 
 ## Improvements (Round 2)
 - [ ] Replace print thumbnails with actual print swatch images from Column A of the "All Prints" Google Sheet
@@ -48,9 +48,9 @@
 - [x] Update server AI mockup procedure to handle product-image-based generation for catalog prints
 
 ## Round 5 — Filter, Share, Logo Fix
-- [ ] Permanently fix hero logo (diagnose root cause of white logo issue)
-- [ ] Add CUSTOM filter tab above print grid
-- [ ] Share Your Design feature (URL-encoded style+print, copy link button)
+- [x] Permanently fix hero logo (diagnose root cause of white logo issue)
+- [x] Add CUSTOM filter tab above print grid
+- [x] Share Your Design feature (URL-encoded style+print, copy link button)
 
 ## Round 6
 - [x] Replace emoji/icon in center empty state with actual product photo when style is selected but no print chosen yet

@@ -1,6 +1,27 @@
 import { generateImage } from "./_core/imageGeneration";
 import { publicProcedure, router } from "./_core/trpc";
+import { parseProductHtml, parseSearchHtml } from "./ydParser";
 import { z } from "zod";
+
+const YD_FETCH_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+  "Accept-Language": "en-US,en;q=0.9",
+};
+
+async function fetchYdHtml(url: string): Promise<string> {
+  const response = await fetch(url, {
+    headers: YD_FETCH_HEADERS,
+    signal: AbortSignal.timeout(10000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`YD request failed: ${response.status}`);
+  }
+
+  return response.text();
+}
 
 // ─── YD PROXY ROUTER ──────────────────────────────────────────────────────────
 // Fetches product search pages from yogademocracy.com server-side to avoid CORS.
@@ -11,45 +32,18 @@ const ydProxyRouter = router({
     .input(z.object({ query: z.string().min(1).max(200) }))
     .query(async ({ input }) => {
       const searchUrl = `https://www.yogademocracy.com/search?q=${encodeURIComponent(input.query)}`;
+      const html = await fetchYdHtml(searchUrl);
+      return parseSearchHtml(html);
+    }),
 
-      const response = await fetch(searchUrl, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-          "Accept-Language": "en-US,en;q=0.9",
-        },
-        signal: AbortSignal.timeout(10000),
-      });
-
-      if (!response.ok) {
-        throw new Error(`YD search failed: ${response.status}`);
+  getProductDetails: publicProcedure
+    .input(z.object({ productUrl: z.string().url() }))
+    .query(async ({ input }) => {
+      if (!input.productUrl.startsWith("https://www.yogademocracy.com/")) {
+        throw new Error("Product URL must be on yogademocracy.com");
       }
-
-      const html = await response.text();
-
-      // Extract the first product image from the SFCC CDN
-      const imgMatch = html.match(
-        /src="(https:\/\/www\.yogademocracy\.com\/dw\/image\/v2\/[^"]*Sites-yd-products[^"]*?)"/
-      );
-      const imageUrl = imgMatch
-        ? imgMatch[1]
-            .replace(/&amp;/g, "&")
-            .replace(/sw=\d+/, "sw=800")
-            .replace(/q=\d+/, "q=85")
-        : null;
-
-      // Extract the first product page URL (handles both absolute and relative paths)
-      const urlMatch = html.match(
-        /href="((?:https:\/\/www\.yogademocracy\.com)?\/shop\/[^"]*\.html)"/
-      );
-      let productUrl: string | null = null;
-      if (urlMatch) {
-        const raw = urlMatch[1].replace(/&amp;/g, "&");
-        productUrl = raw.startsWith("http") ? raw : `https://www.yogademocracy.com${raw}`;
-      }
-
-      return { imageUrl, productUrl };
+      const html = await fetchYdHtml(input.productUrl);
+      return parseProductHtml(html, input.productUrl);
     }),
 });
 
@@ -70,8 +64,6 @@ const aiMockupRouter = router({
     .mutation(async ({ input }) => {
       const { printName, printThumbnailUrl, styleName, styleCategory } = input;
 
-      // Build a detailed prompt that describes the garment and instructs the AI
-      // to apply the print pattern to it realistically
       const garmentDesc = getGarmentDescription(styleName, styleCategory);
 
       const prompt = [
