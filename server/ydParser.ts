@@ -27,8 +27,7 @@ function upgradeImageUrl(imageUrl: string): string {
   return imageUrl.replace(/sw=\d+/, "sw=800").replace(/q=\d+/, "q=85");
 }
 
-const SHOP_HREF_RE =
-  /(?:href|data-url)="((?:https:\/\/www\.yogademocracy\.com)?\/shop\/[^"#?]+\.html)"/gi;
+const SHOP_PATH_RE = /(?:https:\/\/www\.yogademocracy\.com)?\/shop\/[^"#?]+\.html/i;
 const PRODUCT_IMG_RE =
   /src="(https:\/\/www\.yogademocracy\.com\/dw\/image\/v2\/[^"]*Sites-yd-products[^"]*?)"/i;
 
@@ -36,48 +35,90 @@ function productIdFromUrl(productUrl: string): string | null {
   return productUrl.match(/\/([^/]+)\.html$/)?.[1] ?? null;
 }
 
-function extractFromWindow(windowHtml: string, productUrl: string): YdSearchHit {
-  const imgMatch = windowHtml.match(PRODUCT_IMG_RE);
-  const nameMatch =
-    windowHtml.match(/data-name="([^"]+)"/i) ??
-    windowHtml.match(/alt="([^"]+)"/i) ??
-    windowHtml.match(/<a class="link"[^>]*>([^<]+)<\/a>/i);
-
-  const pidMatch = windowHtml.match(/data-(?:product-id|pid)="([^"]+)"/i);
-
-  return {
-    productUrl,
-    productId: pidMatch?.[1] ?? productIdFromUrl(productUrl),
-    productName: nameMatch ? decodeHtml(nameMatch[1]).trim() : null,
-    imageUrl: imgMatch ? upgradeImageUrl(decodeHtml(imgMatch[1])) : null,
-  };
+function extractImage(block: string): string | null {
+  const imgMatch = block.match(PRODUCT_IMG_RE);
+  return imgMatch ? upgradeImageUrl(decodeHtml(imgMatch[1])) : null;
 }
 
-function mergeHits(into: YdSearchHit, from: YdSearchHit): YdSearchHit {
-  return {
-    productUrl: into.productUrl,
-    productId: into.productId ?? from.productId,
-    productName: into.productName ?? from.productName,
-    imageUrl: into.imageUrl ?? from.imageUrl,
-  };
+function extractName(block: string): string | null {
+  const nameMatch =
+    block.match(/data-name="([^"]+)"/i) ??
+    block.match(/<a class="link"[^>]*>([^<]+)<\/a>/i) ??
+    block.match(/alt="([^"]+)"/i);
+  return nameMatch ? decodeHtml(nameMatch[1]).trim() : null;
+}
+
+function addHit(byUrl: Map<string, YdSearchHit>, hit: YdSearchHit): void {
+  const existing = byUrl.get(hit.productUrl);
+  if (!existing) {
+    byUrl.set(hit.productUrl, hit);
+    return;
+  }
+  byUrl.set(hit.productUrl, {
+    productUrl: existing.productUrl,
+    productId: existing.productId ?? hit.productId,
+    productName: existing.productName ?? hit.productName,
+    imageUrl: existing.imageUrl ?? hit.imageUrl,
+  });
 }
 
 /**
  * Extract every unique shop product from a YD search results page.
- * Does not pick a winner — callers must match against catalog identity.
+ * Tiles are parsed as discrete blocks so a neighboring product cannot
+ * donate its name or image.
  */
 export function parseSearchHits(html: string): YdSearchHit[] {
   const byUrl = new Map<string, YdSearchHit>();
 
-  SHOP_HREF_RE.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = SHOP_HREF_RE.exec(html)) !== null) {
-    const productUrl = normalizeProductUrl(match[1]);
-    const start = Math.max(0, match.index - 2500);
-    const end = Math.min(html.length, match.index + match[0].length + 2500);
-    const hit = extractFromWindow(html.slice(start, end), productUrl);
-    const existing = byUrl.get(productUrl);
-    byUrl.set(productUrl, existing ? mergeHits(existing, hit) : hit);
+  const pairRe =
+    /data-name="([^"]+)"[\s\S]{0,400}?data-url="([^"]+)"|data-url="([^"]+)"[\s\S]{0,400}?data-name="([^"]+)"/gi;
+  let pair: RegExpExecArray | null;
+  while ((pair = pairRe.exec(html)) !== null) {
+    const name = decodeHtml(pair[1] ?? pair[4] ?? "").trim();
+    const rawUrl = pair[2] ?? pair[3] ?? "";
+    if (!name || !SHOP_PATH_RE.test(rawUrl)) continue;
+    const productUrl = normalizeProductUrl(rawUrl);
+    addHit(byUrl, {
+      productUrl,
+      productId: productIdFromUrl(productUrl),
+      productName: name,
+      imageUrl: null,
+    });
+  }
+
+  const tileStarts = [...html.matchAll(/<div class="product" data-pid="([^"]+)">/gi)];
+  for (let i = 0; i < tileStarts.length; i++) {
+    const start = tileStarts[i].index ?? 0;
+    const end = tileStarts[i + 1]?.index ?? html.length;
+    const block = html.slice(start, Math.min(end, start + 8000));
+    const pid = tileStarts[i][1];
+    const hrefMatch = block.match(
+      /href="((?:https:\/\/www\.yogademocracy\.com)?\/shop\/[^"#?]+\.html)"/i
+    );
+    if (!hrefMatch) continue;
+    addHit(byUrl, {
+      productUrl: normalizeProductUrl(hrefMatch[1]),
+      productId: pid,
+      productName: extractName(block),
+      imageUrl: extractImage(block),
+    });
+  }
+
+  if (byUrl.size === 0) {
+    const hrefRe = /href="((?:https:\/\/www\.yogademocracy\.com)?\/shop\/[^"#?]+\.html)"/gi;
+    let hrefMatch: RegExpExecArray | null;
+    while ((hrefMatch = hrefRe.exec(html)) !== null) {
+      const productUrl = normalizeProductUrl(hrefMatch[1]);
+      const start = Math.max(0, hrefMatch.index - 400);
+      const end = Math.min(html.length, hrefMatch.index + hrefMatch[0].length + 800);
+      const block = html.slice(start, end);
+      addHit(byUrl, {
+        productUrl,
+        productId: productIdFromUrl(productUrl),
+        productName: extractName(block),
+        imageUrl: extractImage(block),
+      });
+    }
   }
 
   return [...byUrl.values()];

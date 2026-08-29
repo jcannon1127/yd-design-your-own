@@ -96,15 +96,17 @@ function slugAppearsInUrl(url: string, slug: string): boolean {
 }
 
 function styleMatchesIdentity(hit: YdSearchHit, identity: YdSearchIdentity): boolean {
-  const name = hit.productName ?? "";
-  const { stylePart } = splitStyleAndPrint(name);
+  const slug = identity.styleUrlSlug?.toLowerCase() ?? "";
+  if (!hit.productName) {
+    return !!slug && slugAppearsInUrl(hit.productUrl, slug);
+  }
+
+  const { stylePart } = splitStyleAndPrint(hit.productName);
   const catalogTokens = tokenizeName(identity.styleName);
   const styleTokens = tokenizeName(stylePart);
   const tokenMatch =
     catalogTokens.length > 0 &&
-    catalogTokens.every(
-      (token) => styleTokens.includes(token) || styleTokens.some((part) => part.includes(token))
-    );
+    catalogTokens.every((token) => styleTokens.includes(token));
 
   const catalogCompact = compactAlnum(identity.styleName);
   const styleCompact = compactAlnum(stylePart);
@@ -112,26 +114,22 @@ function styleMatchesIdentity(hit: YdSearchHit, identity: YdSearchIdentity): boo
     catalogCompact.length > 0 &&
     (catalogCompact === styleCompact || styleCompact.includes(catalogCompact));
 
-  const slug = identity.styleUrlSlug?.toLowerCase() ?? "";
-  const slugMatch =
-    !!slug &&
-    (slugAppearsInUrl(hit.productUrl, slug) ||
-      tokenizeName(slug).every((token) => styleTokens.includes(token)));
+  const slugAsName =
+    !!slug && tokenizeName(slug).every((token) => styleTokens.includes(token));
 
-  return tokenMatch || compactMatch || slugMatch;
+  return tokenMatch || compactMatch || slugAsName;
 }
 
 function printMatchesIdentity(hit: YdSearchHit, identity: YdSearchIdentity): boolean {
-  const name = hit.productName ?? "";
-  const { printPart } = splitStyleAndPrint(name);
+  const slug = identity.printUrlName?.toLowerCase() ?? "";
+  if (!hit.productName) {
+    return slug.length >= 4 && slugAppearsInUrl(hit.productUrl, slug);
+  }
+
+  const { printPart } = splitStyleAndPrint(hit.productName);
   const want = compactAlnum(identity.printName);
   const got = compactAlnum(printPart);
-  const exactName = want.length >= 4 && want === got;
-
-  const slug = identity.printUrlName?.toLowerCase() ?? "";
-  const slugMatch = slug.length >= 4 && slugAppearsInUrl(hit.productUrl, slug);
-
-  return exactName || slugMatch;
+  return want.length >= 4 && want === got;
 }
 
 /** True only when the hit is the selected style AND the selected print. */
