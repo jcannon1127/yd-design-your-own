@@ -128,10 +128,13 @@ const aiMockupRouter = router({
         ],
       });
 
-      const imageUrl = acceptGeneratedMockup(result.url, printThumbnailUrl);
+      const imageUrl = result.url ?? null;
       const payload: MockupGenerateResult = {
         imageUrl,
-        fallback: result.fallback || imageUrl === null,
+        fallback:
+          result.fallback ||
+          imageUrl === null ||
+          acceptGeneratedMockup(imageUrl, printThumbnailUrl) === null,
       };
       return payload;
     }),

@@ -132,46 +132,26 @@ function PrintThumbnail({ print, selectedStyle }: { print: Print; selectedStyle:
   return <CatalogPrintThumbnail print={print} selectedStyle={selectedStyle} />;
 }
 
-// ─── AI MOCKUP PREVIEW ────────────────────────────────────────────────────────
-// Custom / isNew prints skip YD search. Show a generated garment mockup when
-// aiMockup.generate returns a real image. If the provider is missing or echoes
-// the print crop, show an honest non-AI fallback (style photo + swatch) — never
-// an "AI Preview" badge on a raw print tile.
+// ─── CUSTOM PRINT PREVIEW ─────────────────────────────────────────────────────
+// isNew prints skip YD search. generateImage may return the print swatch when
+// no key is set — never put an "AI Preview" badge on that fallback.
 
 function NewPrintPreview({ style, print }: { style: Style; print: Print }) {
   const [aiImageUrl, setAiImageUrl] = useState<string | null>(null);
-  const [mockupUnavailable, setMockupUnavailable] = useState(false);
   const generateMockup = trpc.aiMockup.generate.useMutation({
     onSuccess: (data) => {
-      const accepted = resolveAiPreviewUrl(data, print.thumbnail);
-      setAiImageUrl(accepted);
-      setMockupUnavailable(!accepted);
-    },
-    onError: () => {
-      setAiImageUrl(null);
-      setMockupUnavailable(true);
+      setAiImageUrl(resolveAiPreviewUrl(data, print.thumbnail));
     },
   });
 
   useEffect(() => {
     setAiImageUrl(null);
-    setMockupUnavailable(false);
   }, [style.id, print.urlName]);
-
-  const requestMockup = () => {
-    generateMockup.mutate({
-      printName: print.name,
-      printThumbnailUrl: print.thumbnail!,
-      styleName: style.name,
-      styleCategory: style.category,
-    });
-  };
 
   return (
     <div className="relative w-full h-full flex flex-col">
       <div className="relative flex-1 overflow-hidden rounded-lg bg-secondary/20 min-h-[360px]">
         <AnimatePresence mode="wait">
-          {/* AI generating state */}
           {generateMockup.isPending && (
             <motion.div
               key="ai-loading"
@@ -190,7 +170,6 @@ function NewPrintPreview({ style, print }: { style: Style; print: Print }) {
             </motion.div>
           )}
 
-          {/* Real generated garment only — never the print crop */}
           {aiImageUrl && !generateMockup.isPending && (
             <motion.div key="ai-result" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0">
               <img
@@ -202,47 +181,31 @@ function NewPrintPreview({ style, print }: { style: Style; print: Print }) {
                 <Sparkles size={10} className="text-white" />
                 <span className="text-white text-[9px] font-body font-semibold">AI Preview</span>
               </div>
-              <button
-                onClick={requestMockup}
-                className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full
-                           bg-black/50 backdrop-blur-sm text-white text-[10px] font-body hover:bg-black/70 transition-all"
-              >
-                <Sparkles size={9} /> Regenerate
-              </button>
             </motion.div>
           )}
 
-          {/* Honest non-AI fallback: selected style garment + print swatch reference */}
           {!aiImageUrl && !generateMockup.isPending && (
-            <motion.div key="fallback" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 flex flex-col">
-              <div className="flex-1 overflow-hidden relative">
+            <motion.div key="swatch" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 flex flex-col">
+              <div className="flex-1 overflow-hidden">
                 <img
-                  src={style.thumbnail}
-                  alt={style.name}
-                  className="w-full h-full object-contain object-top"
+                  src={print.thumbnail!}
+                  alt={`${print.name} print swatch`}
+                  className="w-full h-full object-cover object-top"
                 />
-                {print.thumbnail && (
-                  <div className="absolute top-3 left-3 flex items-center gap-2 rounded-lg bg-background/90 border border-border shadow-sm p-1.5 pr-2.5">
-                    <img
-                      src={print.thumbnail}
-                      alt={`${print.name} print swatch`}
-                      className="w-12 h-12 rounded-md object-cover"
-                    />
-                    <div>
-                      <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-body">Print swatch</p>
-                      <p className="text-xs font-body font-medium text-foreground leading-tight">{print.name}</p>
-                    </div>
-                  </div>
-                )}
               </div>
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 flex flex-col items-center gap-2">
-                <p className="text-white/80 text-xs font-body text-center max-w-xs">
-                  {mockupUnavailable
-                    ? `A garment mockup isn't available. Showing the ${style.name} style with the ${print.name} swatch.`
-                    : `${print.name} is a custom print. Showing the ${style.name} style with the print swatch — not a garment mockup.`}
+                <p className="text-white/80 text-xs font-body text-center">
+                  This is the {print.name} print swatch
                 </p>
                 <button
-                  onClick={requestMockup}
+                  onClick={() =>
+                    generateMockup.mutate({
+                      printName: print.name,
+                      printThumbnailUrl: print.thumbnail!,
+                      styleName: style.name,
+                      styleCategory: style.category,
+                    })
+                  }
                   className="flex items-center gap-2 px-4 py-2 rounded-full bg-accent text-white text-xs font-body font-semibold
                              hover:bg-accent/90 transition-all duration-200 shadow-lg hover:shadow-xl"
                 >
@@ -250,6 +213,13 @@ function NewPrintPreview({ style, print }: { style: Style; print: Print }) {
                   Generate AI Preview on {style.name}
                 </button>
               </div>
+            </motion.div>
+          )}
+
+          {generateMockup.isError && !generateMockup.isPending && (
+            <motion.div key="ai-error" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+              className="absolute bottom-2 left-2 right-2 bg-destructive/90 rounded-md px-3 py-2">
+              <p className="text-white text-xs font-body text-center">AI preview failed — try again</p>
             </motion.div>
           )}
         </AnimatePresence>

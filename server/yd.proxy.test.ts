@@ -171,7 +171,7 @@ describe("aiMockup.generate", () => {
     }
   });
 
-  it("does not return the print swatch as an AI mockup when OPENAI_API_KEY is unset", async () => {
+  it("marks the print-swatch placeholder as fallback when OPENAI_API_KEY is unset", async () => {
     delete process.env.OPENAI_API_KEY;
     const swatch = "https://cdn.example/print-coral-reef.jpg";
     const caller = appRouter.createCaller(createContext());
@@ -181,7 +181,7 @@ describe("aiMockup.generate", () => {
       styleName: "Original Bell",
       styleCategory: "Bells & Flares",
     });
-    expect(result.imageUrl).toBeNull();
+    expect(result.imageUrl).toBe(swatch);
     expect(result.fallback).toBe(true);
   });
 });

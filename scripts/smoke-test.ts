@@ -7,9 +7,8 @@
  *
  * Custom / isNew prints (e.g. Original Bell + Coral Reef) skip YD search.
  * They keep "Request This Print" and must not be treated as catalog PDPs.
- * Their preview is a generated garment mockup or an honest non-AI fallback —
- * never an AI Preview badge on the print crop. That path is covered by
- * unit tests (acceptGeneratedMockup / generateImage / aiMockup.generate).
+ * generateImage may return the print swatch when no key is set; the UI must
+ * not show an AI Preview badge on that fallback (resolveAiPreviewUrl).
  *
  * Usage:
  *   npm run smoke-test

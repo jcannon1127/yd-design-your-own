@@ -1,9 +1,9 @@
 /**
  * AI mockup URL hygiene.
  *
- * `aiMockup.generate` must distinguish a real garment from a placeholder.
- * Placeholders return `{ imageUrl: null, fallback: true }`. The UI may show
- * an "AI Preview" badge only when `resolveAiPreviewUrl` returns a URL.
+ * When no OpenAI key is set, generateImage returns the print swatch with
+ * `fallback: true`. The UI may show an "AI Preview" badge only when
+ * `resolveAiPreviewUrl` returns a URL — never on that swatch fallback.
  */
 
 export interface MockupGenerateResult {

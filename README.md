@@ -75,4 +75,4 @@ shared/         Code shared between client + server
 
 ## Adding an AI mockup provider
 
-The `/api/aiMockup.generate` route is wired and live in the UI. When `OPENAI_API_KEY` is unset or generation fails, it returns null (never the print swatch). The UI then shows an honest non-AI fallback without an AI Preview badge. Set `OPENAI_API_KEY` to enable real AI mockups via OpenAI's `gpt-image-1` model. See `server/_core/imageGeneration.ts` to swap providers.
+The `/api/aiMockup.generate` route is wired and live in the UI. When `OPENAI_API_KEY` is unset, `generateImage` returns the input print swatch with `fallback: true`. The UI shows that swatch without an AI Preview badge. This is not a garment compositor.
