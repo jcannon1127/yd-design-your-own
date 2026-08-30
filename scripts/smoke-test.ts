@@ -2,11 +2,16 @@
  * Post-deploy smoke test — hits yogademocracy.com directly via the same
  * parser the production API uses. No server required.
  *
+ * Asserts style+print identity (name), not merely that some URL exists.
+ * A first-hit URL for a different product is a failure.
+ *
  * Usage:
  *   npm run smoke-test
  */
 
-import { parseProductHtml, parseSearchHtml } from "../server/ydParser";
+import { parseProductHtml, pickVerifiedSearchResult } from "../server/ydParser";
+import type { YdSearchIdentity } from "../shared/yd";
+import { hitMatchesIdentity, searchQueryVariants } from "../shared/yd";
 
 const YD_HEADERS = {
   "User-Agent":
@@ -14,12 +19,133 @@ const YD_HEADERS = {
   Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 };
 
-const COMBOS = [
-  { style: "Original Bell", print: "Flower Child" },
-  { style: "YD Legging (28\")", print: "Flower Child" },
-  { style: "Biker Short", print: "Flower Child" },
-  { style: "Free Range Bra", print: "Flower Child" },
-  { style: "Ready Or Knot Tank", print: "Flower Child" },
+type Combo = YdSearchIdentity & {
+  /** When true, a no-match is success (combo is not on YD). A wrong-product URL is always a failure. */
+  allowNoMatch?: boolean;
+  /** Substring that must appear in a resolved product URL. */
+  expectUrlIncludes?: string;
+  /** Substrings that must not appear — another style that happens to have the print. */
+  forbidUrlIncludes?: string[];
+};
+
+const COMBOS: Combo[] = [
+  {
+    styleName: "Original Bell",
+    printName: "Flower Child",
+    styleUrlSlug: "original-bell",
+    printUrlName: "flower-child",
+    expectUrlIncludes: "flower-child",
+  },
+  {
+    styleName: 'YD Legging (28")',
+    printName: "Folklore",
+    styleUrlSlug: "yd-legging-28",
+    printUrlName: "folklore",
+    expectUrlIncludes: "folklore-printed-yoga-leggings",
+  },
+  {
+    styleName: "Original Bell",
+    printName: "Hot Tropic",
+    styleUrlSlug: "original-bell",
+    printUrlName: "hot-tropic",
+    expectUrlIncludes: "original-bell-hot-tropic",
+  },
+  {
+    styleName: "Free Range Bra",
+    printName: "Hot Tropic",
+    styleUrlSlug: "free-range-sports-bra",
+    printUrlName: "hot-tropic",
+    expectUrlIncludes: "free-range-sports-bra",
+  },
+  {
+    styleName: "Free Range Bra",
+    printName: "Wildcat",
+    styleUrlSlug: "free-range-sports-bra",
+    printUrlName: "wildcat",
+    allowNoMatch: true,
+    forbidUrlIncludes: ["om-tank", "ghost-leopard"],
+  },
+  {
+    styleName: "Original Bell",
+    printName: "Wildcat",
+    styleUrlSlug: "original-bell",
+    printUrlName: "wildcat",
+    allowNoMatch: true,
+    forbidUrlIncludes: ["ghost-leopard"],
+  },
+  {
+    styleName: "Free Range Bra",
+    printName: "Flower Child",
+    styleUrlSlug: "free-range-sports-bra",
+    printUrlName: "flower-child",
+    allowNoMatch: true,
+  },
+  {
+    styleName: "Biker Short",
+    printName: "Rustica",
+    styleUrlSlug: "biker-short",
+    printUrlName: "rustica",
+    expectUrlIncludes: "the-joey-yoga-short-in-rustica",
+  },
+  {
+    styleName: "Ready Or Knot Tank",
+    printName: "Folklore",
+    styleUrlSlug: "ready-or-knot-tank",
+    printUrlName: "folklore",
+    expectUrlIncludes: "reversible-knot-top-in-folklore",
+  },
+  {
+    styleName: "Ready Or Knot Tank",
+    printName: "Pretty in Black",
+    styleUrlSlug: "ready-or-knot-tank",
+    printUrlName: "pretty-in-black",
+    expectUrlIncludes: "ready-or-knot-tank-pretty-in-black",
+  },
+  {
+    styleName: "Nonstop Short",
+    printName: "Hot Tropic",
+    styleUrlSlug: "non-stop-short",
+    printUrlName: "hot-tropic",
+    expectUrlIncludes: "non-stop-short-hot-tropic",
+  },
+  {
+    styleName: "Biker Short",
+    printName: "Star Dust",
+    styleUrlSlug: "biker-short",
+    printUrlName: "star-dust",
+    expectUrlIncludes: "biker-joey-short-in-star-dust",
+  },
+  {
+    styleName: "Ready Or Knot Tank",
+    printName: "Wildcat",
+    styleUrlSlug: "ready-or-knot-tank",
+    printUrlName: "wildcat",
+    expectUrlIncludes: "reversible-knot-top-in-rawr-talent",
+  },
+  {
+    styleName: "Nonstop Short",
+    printName: "Star Dust",
+    styleUrlSlug: "non-stop-short",
+    printUrlName: "star-dust",
+    allowNoMatch: true,
+    forbidUrlIncludes: ["biker-joey-short", "biker-short-in-"],
+  },
+  {
+    styleName: "Nonstop Short",
+    printName: "Clever Koi",
+    styleUrlSlug: "non-stop-short",
+    printUrlName: "clever-koi",
+    allowNoMatch: true,
+    forbidUrlIncludes: ["biker-short"],
+  },
+  {
+    styleName: "Nonstop Short",
+    printName: "Folklore",
+    styleUrlSlug: "non-stop-short",
+    printUrlName: "folklore",
+    allowNoMatch: true,
+    forbidUrlIncludes: ["reversible-knot-top", "/shop/tops/"],
+  },
 ];
 
 function pass(msg: string) {
@@ -36,6 +162,10 @@ async function fetchYd(url: string): Promise<string> {
   return res.text();
 }
 
+function identityHit(productUrl: string, productName: string | null) {
+  return { productUrl, productName, productId: null, imageUrl: null };
+}
+
 async function main() {
   console.log("\nYD Design Your Own — launch smoke test");
   console.log("Testing live yogademocracy.com integration\n");
@@ -43,23 +173,66 @@ async function main() {
   let passed = 0;
   let failed = 0;
 
-  for (const { style, print } of COMBOS) {
-    const label = `${style} + ${print}`;
+  for (const combo of COMBOS) {
+    const label = `${combo.styleName} + ${combo.printName}`;
     try {
-      const searchHtml = await fetchYd(
-        `https://www.yogademocracy.com/search?q=${encodeURIComponent(`${print} ${style}`)}`
-      );
-      const search = parseSearchHtml(searchHtml);
+      const pages: string[] = [];
+      for (const query of searchQueryVariants(combo.styleName, combo.printName)) {
+        pages.push(
+          await fetchYd(`https://www.yogademocracy.com/search?q=${encodeURIComponent(query)}`)
+        );
+      }
+      const search = pickVerifiedSearchResult(pages, combo);
 
       if (!search.productUrl) {
-        fail(`${label} — no product URL in search results`);
+        if (combo.allowNoMatch) {
+          pass(`${label} — no match (out of catalog, not a different product)`);
+          passed++;
+          continue;
+        }
+        fail(`${label} — no verified style+print match`);
         failed++;
         continue;
       }
-      pass(`${label} → ${search.productUrl.split("/").pop()}`);
+
+      if (combo.forbidUrlIncludes?.some((needle) => search.productUrl!.includes(needle))) {
+        fail(`${label} — wrong-style URL ${search.productUrl.split("/").pop()}`);
+        failed++;
+        continue;
+      }
+
+      if (!search.productName) {
+        fail(`${label} — URL without a product name (${search.productUrl.split("/").pop()})`);
+        failed++;
+        continue;
+      }
+
+      if (!hitMatchesIdentity(identityHit(search.productUrl, search.productName), combo)) {
+        fail(`${label} — name "${search.productName}" is not ${combo.styleName} + ${combo.printName}`);
+        failed++;
+        continue;
+      }
+
+      if (combo.expectUrlIncludes && !search.productUrl.includes(combo.expectUrlIncludes)) {
+        fail(`${label} — URL ${search.productUrl} missing ${combo.expectUrlIncludes}`);
+        failed++;
+        continue;
+      }
+
+      pass(`${label} → ${search.productName} (${search.productUrl.split("/").pop()})`);
+      passed++;
 
       const productHtml = await fetchYd(search.productUrl);
       const details = parseProductHtml(productHtml, search.productUrl);
+
+      if (!details.productName || !hitMatchesIdentity(identityHit(details.productUrl, details.productName), combo)) {
+        fail(`${label} — PDP name "${details.productName}" does not match style+print`);
+        failed++;
+        continue;
+      }
+      pass(`${label} — PDP name ${details.productName}`);
+      passed++;
+
       const attr = details.attributes[0];
       const sizeCount = attr?.options.length ?? 0;
       const inStock = attr?.options.filter((o) => o.available).length ?? 0;
@@ -71,7 +244,6 @@ async function main() {
         pass(`${label} — ${inStock}/${sizeCount} sizes in stock (${attr!.label})`);
         passed++;
       }
-      passed++;
     } catch (err) {
       fail(`${label} — ${err instanceof Error ? err.message : String(err)}`);
       failed++;
