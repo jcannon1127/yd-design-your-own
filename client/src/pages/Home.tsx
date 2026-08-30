@@ -15,6 +15,7 @@ import { STYLES, ACTIVE_PRINTS, type Style, type Print } from "@/lib/data";
 import { useProductDetails } from "@/hooks/useProductDetails";
 import CheckoutPanel from "@/components/CheckoutPanel";
 import { trpc } from "@/lib/trpc";
+import { resolveAiPreviewUrl } from "@shared/mockup";
 import { ChevronDown, ExternalLink, ArrowRight, Sparkles, Loader2, Link2, Check } from "lucide-react";
 
 // ─── HERO BANNER ──────────────────────────────────────────────────────────────
@@ -75,7 +76,17 @@ function NewPrintThumbnail({ print }: { print: Print }) {
 function CatalogPrintThumbnail({ print, selectedStyle }: { print: Print; selectedStyle: Style | null }) {
   const styleName = selectedStyle?.name ?? "Original Bell";
   const query = trpc.yd.searchProduct.useQuery(
-    { query: `${print.name} ${styleName}` },
+    {
+      query: `${print.name} ${styleName}`,
+      styleName,
+      printName: print.name,
+      styleUrlSlug: selectedStyle?.urlSlug,
+      printUrlName: print.urlName,
+      styleAliases: selectedStyle?.ydNames,
+      styleSlugs: selectedStyle?.ydSlugs,
+      printAliases: print.ydNames,
+      printSlugs: print.ydSlugs,
+    },
     { staleTime: 1000 * 60 * 60, retry: 1 }
   );
 
@@ -121,17 +132,18 @@ function PrintThumbnail({ print, selectedStyle }: { print: Print; selectedStyle:
   return <CatalogPrintThumbnail print={print} selectedStyle={selectedStyle} />;
 }
 
-// ─── AI MOCKUP PREVIEW ────────────────────────────────────────────────────────
-// For new prints: show the swatch + an AI "Generate Preview" button.
-// The AI composites the print onto the garment silhouette.
+// ─── CUSTOM PRINT PREVIEW ─────────────────────────────────────────────────────
+// isNew prints skip YD search. generateImage may return the print swatch when
+// no key is set — never put an "AI Preview" badge on that fallback.
 
 function NewPrintPreview({ style, print }: { style: Style; print: Print }) {
   const [aiImageUrl, setAiImageUrl] = useState<string | null>(null);
   const generateMockup = trpc.aiMockup.generate.useMutation({
-    onSuccess: (data) => setAiImageUrl(data.imageUrl ?? null),
+    onSuccess: (data) => {
+      setAiImageUrl(resolveAiPreviewUrl(data, print.thumbnail));
+    },
   });
 
-  // Reset AI image when style or print changes
   useEffect(() => {
     setAiImageUrl(null);
   }, [style.id, print.urlName]);
@@ -140,7 +152,6 @@ function NewPrintPreview({ style, print }: { style: Style; print: Print }) {
     <div className="relative w-full h-full flex flex-col">
       <div className="relative flex-1 overflow-hidden rounded-lg bg-secondary/20 min-h-[360px]">
         <AnimatePresence mode="wait">
-          {/* AI generating state */}
           {generateMockup.isPending && (
             <motion.div
               key="ai-loading"
@@ -159,7 +170,6 @@ function NewPrintPreview({ style, print }: { style: Style; print: Print }) {
             </motion.div>
           )}
 
-          {/* AI generated image */}
           {aiImageUrl && !generateMockup.isPending && (
             <motion.div key="ai-result" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0">
               <img
@@ -174,10 +184,8 @@ function NewPrintPreview({ style, print }: { style: Style; print: Print }) {
             </motion.div>
           )}
 
-          {/* Default: show the print swatch with generate button */}
           {!aiImageUrl && !generateMockup.isPending && (
             <motion.div key="swatch" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 flex flex-col">
-              {/* Print swatch fills the top portion */}
               <div className="flex-1 overflow-hidden">
                 <img
                   src={print.thumbnail!}
@@ -185,7 +193,6 @@ function NewPrintPreview({ style, print }: { style: Style; print: Print }) {
                   className="w-full h-full object-cover object-top"
                 />
               </div>
-              {/* Generate button overlay at bottom */}
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 flex flex-col items-center gap-2">
                 <p className="text-white/80 text-xs font-body text-center">
                   This is the {print.name} print swatch
@@ -209,7 +216,6 @@ function NewPrintPreview({ style, print }: { style: Style; print: Print }) {
             </motion.div>
           )}
 
-          {/* Error state */}
           {generateMockup.isError && !generateMockup.isPending && (
             <motion.div key="ai-error" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               className="absolute bottom-2 left-2 right-2 bg-destructive/90 rounded-md px-3 py-2">
@@ -330,7 +336,10 @@ function CatalogPrintPreview({ style, print, imageUrl, loading, error }: {
   const [aiImageUrl, setAiImageUrl] = useState<string | null>(null);
   const [showAiButton, setShowAiButton] = useState(false);
   const generateMockup = trpc.aiMockup.generate.useMutation({
-    onSuccess: (data) => setAiImageUrl(data.imageUrl ?? null),
+    onSuccess: (data) => {
+      const source = print.thumbnail ?? imageUrl;
+      setAiImageUrl(resolveAiPreviewUrl(data, source));
+    },
   });
 
   useEffect(() => {

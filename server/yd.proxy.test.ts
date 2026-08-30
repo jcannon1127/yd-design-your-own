@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createContext } from "./_core/context";
 import { appRouter } from "./routers";
 
@@ -45,7 +45,13 @@ describe("yd.searchProduct", () => {
     });
 
     const caller = appRouter.createCaller(createContext());
-    const result = await caller.yd.searchProduct({ query: "Flower Child Original Bell" });
+    const result = await caller.yd.searchProduct({
+      query: "Flower Child Original Bell",
+      styleName: "Original Bell",
+      printName: "Flower Child",
+      styleUrlSlug: "original-bell",
+      printUrlName: "flower-child",
+    });
 
     expect(result.imageUrl).toContain("yogademocracy.com/dw/image");
     expect(result.imageUrl).toContain("sw=800");
@@ -84,6 +90,43 @@ describe("yd.searchProduct", () => {
     const caller = appRouter.createCaller(createContext());
     await expect(caller.yd.searchProduct({ query: "" })).rejects.toThrow();
   });
+
+  it("does not return the first search hit when it is a different style+print", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      text: async () => `
+        <html><body>
+          <div class="product" data-pid="om-tank-in-ghost-leopard">
+            <a href="/shop/tops/om-tank-in-ghost-leopard.html">
+              <img src="https://www.yogademocracy.com/dw/image/v2/BLZZ_PRD/on/demandware.static/-/Sites-yd-products/default/abc/ghost.jpg?sw=400&amp;q=80" alt="Om Tank - Ghost Leopard" />
+            </a>
+            <div data-name="Om Tank - Ghost Leopard"
+                 data-url="https://www.yogademocracy.com/shop/tops/om-tank-in-ghost-leopard.html"></div>
+          </div>
+          <div class="product" data-pid="reversible-knot-top-in-rawr-talent">
+            <a href="/shop/tops/reversible-knot-top-in-rawr-talent.html">
+              <img src="https://www.yogademocracy.com/dw/image/v2/BLZZ_PRD/on/demandware.static/-/Sites-yd-products/default/def/rawr.jpg?sw=400&amp;q=80" alt="Ready or Knot Tank - Rawr Talent" />
+            </a>
+            <div data-name="Ready or Knot Tank - Rawr Talent"
+                 data-url="https://www.yogademocracy.com/shop/tops/reversible-knot-top-in-rawr-talent.html"></div>
+          </div>
+        </body></html>
+      `,
+    });
+
+    const caller = appRouter.createCaller(createContext());
+    const result = await caller.yd.searchProduct({
+      query: "Wildcat Free Range Bra",
+      styleName: "Free Range Bra",
+      printName: "Wildcat",
+      styleUrlSlug: "free-range-sports-bra",
+      printUrlName: "wildcat",
+    });
+
+    expect(result.productUrl).toBeNull();
+    expect(result.productName).toBeNull();
+    expect(result.imageUrl).toBeNull();
+  });
 });
 
 describe("yd.getProductDetails", () => {
@@ -114,5 +157,31 @@ describe("yd.getProductDetails", () => {
     await expect(
       caller.yd.getProductDetails({ productUrl: "https://example.com/product.html" })
     ).rejects.toThrow("Product URL must be on yogademocracy.com");
+  });
+});
+
+describe("aiMockup.generate", () => {
+  const originalKey = process.env.OPENAI_API_KEY;
+
+  afterEach(() => {
+    if (originalKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = originalKey;
+    }
+  });
+
+  it("marks the print-swatch placeholder as fallback when OPENAI_API_KEY is unset", async () => {
+    delete process.env.OPENAI_API_KEY;
+    const swatch = "https://cdn.example/print-coral-reef.jpg";
+    const caller = appRouter.createCaller(createContext());
+    const result = await caller.aiMockup.generate({
+      printName: "Coral Reef",
+      printThumbnailUrl: swatch,
+      styleName: "Original Bell",
+      styleCategory: "Bells & Flares",
+    });
+    expect(result.imageUrl).toBe(swatch);
+    expect(result.fallback).toBe(true);
   });
 });

@@ -1,5 +1,7 @@
 # Deploying YD Design Your Own to Vercel
 
+**Primary host is the VPS** at `https://dyo.thisisus.ai` (see [HOSTING.md](./HOSTING.md)). Vercel stays as the backup (`https://yd-design-your-own.vercel.app`). This file is the Vercel path only.
+
 This is the step-by-step. Total time the first time: about 15 minutes.
 
 ## Prerequisites
