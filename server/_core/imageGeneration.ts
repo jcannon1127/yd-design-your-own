@@ -3,7 +3,9 @@
  *
  * Behavior:
  *   - If OPENAI_API_KEY is set, calls OpenAI's gpt-image-1 model.
- *   - Otherwise, returns the input swatch URL as a placeholder so the UI still works.
+ *   - If the key is unset or the provider fails, returns `{ url: null }`.
+ *     Never echo the input print swatch — the UI shows an honest non-AI
+ *     fallback without an "AI Preview" badge.
  *
  * Swap this implementation to use Anthropic, Replicate, Stability, etc. The
  * UI calls `generate()` from `server/routers.ts` (aiMockup.generate) and expects
@@ -22,12 +24,9 @@ export interface GenerateImageResult {
 export async function generateImage(input: GenerateImageInput): Promise<GenerateImageResult> {
   const apiKey = process.env.OPENAI_API_KEY;
 
-  // No provider configured — return the input swatch as a placeholder.
-  // This keeps the UI working without a live AI provider; the swatch shows
-  // in place of the generated mockup. Set OPENAI_API_KEY in Vercel env vars
-  // to enable real AI mockups.
+  // No provider configured — do not pretend the print crop is a mockup.
   if (!apiKey) {
-    return { url: input.originalImages?.[0]?.url ?? null };
+    return { url: null };
   }
 
   try {
@@ -57,16 +56,16 @@ export async function generateImage(input: GenerateImageInput): Promise<Generate
 
     if (!response.ok) {
       console.warn(`[imageGeneration] OpenAI request failed: ${response.status}`);
-      return { url: input.originalImages?.[0]?.url ?? null };
+      return { url: null };
     }
 
     const data = (await response.json()) as { data?: Array<{ url?: string; b64_json?: string }> };
     const first = data.data?.[0];
     if (first?.url) return { url: first.url };
     if (first?.b64_json) return { url: `data:image/png;base64,${first.b64_json}` };
-    return { url: input.originalImages?.[0]?.url ?? null };
+    return { url: null };
   } catch (err) {
     console.warn("[imageGeneration] Provider error:", err);
-    return { url: input.originalImages?.[0]?.url ?? null };
+    return { url: null };
   }
 }

@@ -5,13 +5,21 @@
  * Asserts style+print identity (name), not merely that some URL exists.
  * A first-hit URL for a different product is a failure.
  *
+ * Custom / isNew prints (e.g. Original Bell + Coral Reef) skip YD search.
+ * They keep "Request This Print" and must not be treated as catalog PDPs.
+ * Their preview is a generated garment mockup or an honest non-AI fallback —
+ * never an AI Preview badge on the print crop. That path is covered by
+ * unit tests (acceptGeneratedMockup / generateImage / aiMockup.generate).
+ *
  * Usage:
  *   npm run smoke-test
  */
 
+import { ACTIVE_PRINTS, STYLES } from "../client/src/lib/data";
 import { parseProductHtml, pickVerifiedSearchResult } from "../server/ydParser";
 import type { YdSearchIdentity } from "../shared/yd";
 import { hitMatchesIdentity, searchQueryVariants } from "../shared/yd";
+import { acceptGeneratedMockup } from "../shared/mockup";
 
 const YD_HEADERS = {
   "User-Agent":
@@ -172,6 +180,22 @@ async function main() {
 
   let passed = 0;
   let failed = 0;
+
+  const coral = ACTIVE_PRINTS.find((p) => p.urlName === "coral-reef");
+  const bell = STYLES.find((s) => s.id === "original-bell");
+  if (coral?.isNew && coral.thumbnail && bell?.thumbnail) {
+    const echoed = acceptGeneratedMockup(coral.thumbnail, coral.thumbnail);
+    if (echoed === null) {
+      pass("Original Bell + Coral Reef — custom/isNew; print crop cannot wear an AI Preview badge");
+      passed++;
+    } else {
+      fail("Original Bell + Coral Reef — print crop was accepted as a mockup");
+      failed++;
+    }
+  } else {
+    fail("Original Bell + Coral Reef — catalog must mark Coral Reef as custom/isNew with a swatch");
+    failed++;
+  }
 
   for (const combo of COMBOS) {
     const label = `${combo.styleName} + ${combo.printName}`;

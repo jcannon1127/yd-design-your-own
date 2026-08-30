@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createContext } from "./_core/context";
 import { appRouter } from "./routers";
 
@@ -157,5 +157,30 @@ describe("yd.getProductDetails", () => {
     await expect(
       caller.yd.getProductDetails({ productUrl: "https://example.com/product.html" })
     ).rejects.toThrow("Product URL must be on yogademocracy.com");
+  });
+});
+
+describe("aiMockup.generate", () => {
+  const originalKey = process.env.OPENAI_API_KEY;
+
+  afterEach(() => {
+    if (originalKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = originalKey;
+    }
+  });
+
+  it("does not return the print swatch as an AI mockup when OPENAI_API_KEY is unset", async () => {
+    delete process.env.OPENAI_API_KEY;
+    const swatch = "https://cdn.example/print-coral-reef.jpg";
+    const caller = appRouter.createCaller(createContext());
+    const result = await caller.aiMockup.generate({
+      printName: "Coral Reef",
+      printThumbnailUrl: swatch,
+      styleName: "Original Bell",
+      styleCategory: "Bells & Flares",
+    });
+    expect(result.imageUrl).toBeNull();
   });
 });

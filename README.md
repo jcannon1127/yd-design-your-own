@@ -75,4 +75,4 @@ shared/         Code shared between client + server
 
 ## Adding an AI mockup provider
 
-The `/api/aiMockup.generate` route is wired and live in the UI. By default it returns the input swatch as a placeholder. To enable real AI mockups, set `OPENAI_API_KEY` in your Vercel project env vars — the route uses OpenAI's `gpt-image-1` model. See `server/_core/imageGeneration.ts` to swap providers.
+The `/api/aiMockup.generate` route is wired and live in the UI. When `OPENAI_API_KEY` is unset or generation fails, it returns null (never the print swatch). The UI then shows an honest non-AI fallback without an AI Preview badge. Set `OPENAI_API_KEY` to enable real AI mockups via OpenAI's `gpt-image-1` model. See `server/_core/imageGeneration.ts` to swap providers.

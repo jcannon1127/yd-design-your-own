@@ -56,6 +56,8 @@ export default function CheckoutPanel({
     );
   }
 
+  // Custom / isNew prints are not on YD.com — keep Request This Print.
+  // Do not deep-link or turn this into Add to Cart.
   if (isCustomPrint) {
     return (
       <div className="space-y-3">
