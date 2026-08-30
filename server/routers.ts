@@ -1,6 +1,6 @@
 import { generateImage } from "./_core/imageGeneration";
 import { publicProcedure, router } from "./_core/trpc";
-import { acceptGeneratedMockup } from "../shared/mockup";
+import { acceptGeneratedMockup, type MockupGenerateResult } from "../shared/mockup";
 import type { YdSearchIdentity } from "../shared/yd";
 import { searchQueryVariants } from "../shared/yd";
 import { parseProductHtml, pickVerifiedSearchResult } from "./ydParser";
@@ -128,7 +128,12 @@ const aiMockupRouter = router({
         ],
       });
 
-      return { imageUrl: acceptGeneratedMockup(result.url, printThumbnailUrl) };
+      const imageUrl = acceptGeneratedMockup(result.url, printThumbnailUrl);
+      const payload: MockupGenerateResult = {
+        imageUrl,
+        fallback: result.fallback || imageUrl === null,
+      };
+      return payload;
     }),
 });
 

@@ -85,7 +85,7 @@ After Caddy + Cloudflare: `https://dyo.thisisus.ai/` and `https://dyo.thisisus.a
 |----------|---------|--------|
 | `PORT` | `3040` | High port only. Never 80/443. |
 | `HOST` | `0.0.0.0` | Use `127.0.0.1` for a native process behind Caddy. |
-| `OPENAI_API_KEY` | unset | Optional. When unset or generation fails, `aiMockup.generate` returns null — the UI shows a non-AI style+swatch fallback without an AI Preview badge. Never echoes the print crop as a mockup. |
+| `OPENAI_API_KEY` | unset | Optional, DYO-owned only. When unset or generation fails, `aiMockup.generate` returns `{ imageUrl: null, fallback: true }` — the UI shows a non-AI style+swatch fallback without an AI Preview badge. Never echoes the print crop as a mockup. |
 
 No database, SFCC OCAPI, or other secrets are required.
 

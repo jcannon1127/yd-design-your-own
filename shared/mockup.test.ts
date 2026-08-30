@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptGeneratedMockup } from "./mockup";
+import { acceptGeneratedMockup, resolveAiPreviewUrl } from "./mockup";
 
 const SWATCH = "https://cdn.example/print-coral-reef.jpg";
 const MOCKUP = "https://cdn.example/generated-bell-coral-reef.png";
@@ -21,5 +21,20 @@ describe("acceptGeneratedMockup", () => {
 
   it("keeps a generated URL when no source was provided", () => {
     expect(acceptGeneratedMockup(MOCKUP, null)).toBe(MOCKUP);
+  });
+});
+
+describe("resolveAiPreviewUrl", () => {
+  it("returns null when the server marks the result as a placeholder", () => {
+    expect(resolveAiPreviewUrl({ imageUrl: SWATCH, fallback: true }, SWATCH)).toBeNull();
+    expect(resolveAiPreviewUrl({ imageUrl: null, fallback: true }, SWATCH)).toBeNull();
+  });
+
+  it("returns null when imageUrl is the print crop even if fallback was omitted", () => {
+    expect(resolveAiPreviewUrl({ imageUrl: SWATCH }, SWATCH)).toBeNull();
+  });
+
+  it("returns a generated garment URL only when fallback is false", () => {
+    expect(resolveAiPreviewUrl({ imageUrl: MOCKUP, fallback: false }, SWATCH)).toBe(MOCKUP);
   });
 });

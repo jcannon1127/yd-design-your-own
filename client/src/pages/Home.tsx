@@ -15,7 +15,7 @@ import { STYLES, ACTIVE_PRINTS, type Style, type Print } from "@/lib/data";
 import { useProductDetails } from "@/hooks/useProductDetails";
 import CheckoutPanel from "@/components/CheckoutPanel";
 import { trpc } from "@/lib/trpc";
-import { acceptGeneratedMockup } from "@shared/mockup";
+import { resolveAiPreviewUrl } from "@shared/mockup";
 import { ChevronDown, ExternalLink, ArrowRight, Sparkles, Loader2, Link2, Check } from "lucide-react";
 
 // ─── HERO BANNER ──────────────────────────────────────────────────────────────
@@ -143,7 +143,7 @@ function NewPrintPreview({ style, print }: { style: Style; print: Print }) {
   const [mockupUnavailable, setMockupUnavailable] = useState(false);
   const generateMockup = trpc.aiMockup.generate.useMutation({
     onSuccess: (data) => {
-      const accepted = acceptGeneratedMockup(data.imageUrl, print.thumbnail);
+      const accepted = resolveAiPreviewUrl(data, print.thumbnail);
       setAiImageUrl(accepted);
       setMockupUnavailable(!accepted);
     },
@@ -368,7 +368,7 @@ function CatalogPrintPreview({ style, print, imageUrl, loading, error }: {
   const generateMockup = trpc.aiMockup.generate.useMutation({
     onSuccess: (data) => {
       const source = print.thumbnail ?? imageUrl;
-      setAiImageUrl(acceptGeneratedMockup(data.imageUrl, source));
+      setAiImageUrl(resolveAiPreviewUrl(data, source));
     },
   });
 

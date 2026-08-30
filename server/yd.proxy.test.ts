@@ -182,5 +182,6 @@ describe("aiMockup.generate", () => {
       styleCategory: "Bells & Flares",
     });
     expect(result.imageUrl).toBeNull();
+    expect(result.fallback).toBe(true);
   });
 });

@@ -19,7 +19,7 @@ import { ACTIVE_PRINTS, STYLES } from "../client/src/lib/data";
 import { parseProductHtml, pickVerifiedSearchResult } from "../server/ydParser";
 import type { YdSearchIdentity } from "../shared/yd";
 import { hitMatchesIdentity, searchQueryVariants } from "../shared/yd";
-import { acceptGeneratedMockup } from "../shared/mockup";
+import { acceptGeneratedMockup, resolveAiPreviewUrl } from "../shared/mockup";
 
 const YD_HEADERS = {
   "User-Agent":
@@ -185,7 +185,11 @@ async function main() {
   const bell = STYLES.find((s) => s.id === "original-bell");
   if (coral?.isNew && coral.thumbnail && bell?.thumbnail) {
     const echoed = acceptGeneratedMockup(coral.thumbnail, coral.thumbnail);
-    if (echoed === null) {
+    const placeholder = resolveAiPreviewUrl(
+      { imageUrl: coral.thumbnail, fallback: true },
+      coral.thumbnail
+    );
+    if (echoed === null && placeholder === null) {
       pass("Original Bell + Coral Reef — custom/isNew; print crop cannot wear an AI Preview badge");
       passed++;
     } else {
